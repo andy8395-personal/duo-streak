@@ -14,13 +14,168 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      habit_logs: {
+        Row: {
+          created_at: string
+          habit_id: string
+          id: string
+          log_date: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          habit_id: string
+          id?: string
+          log_date?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          habit_id?: string
+          id?: string
+          log_date?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "habit_logs_habit_id_fkey"
+            columns: ["habit_id"]
+            isOneToOne: false
+            referencedRelation: "habits"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      habits: {
+        Row: {
+          created_at: string
+          icon: string
+          id: string
+          pair_id: string
+          position: number
+          title: string
+        }
+        Insert: {
+          created_at?: string
+          icon?: string
+          id?: string
+          pair_id: string
+          position?: number
+          title: string
+        }
+        Update: {
+          created_at?: string
+          icon?: string
+          id?: string
+          pair_id?: string
+          position?: number
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "habits_pair_id_fkey"
+            columns: ["pair_id"]
+            isOneToOne: false
+            referencedRelation: "pairs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pairs: {
+        Row: {
+          archived: boolean
+          created_at: string
+          current_streak: number
+          id: string
+          invite_code: string
+          last_completed_date: string | null
+          longest_streak: number
+          user1_id: string
+          user2_id: string | null
+        }
+        Insert: {
+          archived?: boolean
+          created_at?: string
+          current_streak?: number
+          id?: string
+          invite_code: string
+          last_completed_date?: string | null
+          longest_streak?: number
+          user1_id: string
+          user2_id?: string | null
+        }
+        Update: {
+          archived?: boolean
+          created_at?: string
+          current_streak?: number
+          id?: string
+          invite_code?: string
+          last_completed_date?: string | null
+          longest_streak?: number
+          user1_id?: string
+          user2_id?: string | null
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          active_pair_id: string | null
+          avatar_emoji: string
+          created_at: string
+          display_name: string
+          id: string
+          reminder_time: string | null
+          timezone: string
+          updated_at: string
+        }
+        Insert: {
+          active_pair_id?: string | null
+          avatar_emoji?: string
+          created_at?: string
+          display_name?: string
+          id: string
+          reminder_time?: string | null
+          timezone?: string
+          updated_at?: string
+        }
+        Update: {
+          active_pair_id?: string | null
+          avatar_emoji?: string
+          created_at?: string
+          display_name?: string
+          id?: string
+          reminder_time?: string | null
+          timezone?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profiles_active_pair_fk"
+            columns: ["active_pair_id"]
+            isOneToOne: false
+            referencedRelation: "pairs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      archive_pair: { Args: { _pair_id: string }; Returns: undefined }
+      create_pair: { Args: never; Returns: string }
+      generate_invite_code: { Args: never; Returns: string }
+      is_pair_member: {
+        Args: { _pair_id: string; _user_id: string }
+        Returns: boolean
+      }
+      join_pair: { Args: { _code: string }; Returns: string }
+      shares_pair_with: {
+        Args: { _me: string; _other_id: string }
+        Returns: boolean
+      }
+      switch_active_pair: { Args: { _pair_id: string }; Returns: undefined }
     }
     Enums: {
       [_ in never]: never
