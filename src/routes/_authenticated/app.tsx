@@ -1,17 +1,13 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Flame, Check, Copy, Share2, Plus, Trash2, Bell, Dumbbell, BookOpen,
-  Droplet, Moon, Brain, Heart, Sun, Users, LogOut, ChevronDown, UserPlus,
-  Settings as SettingsIcon, X,
+  Copy, Share2, Plus, Bell, Users, UserPlus, ChevronDown, Home, Snowflake,
+  PlayCircle, Trophy, Flame, Sparkles,
 } from "lucide-react";
 import { toast } from "sonner";
 import logo from "@/assets/pairup-logo.png.asset.json";
 import { supabase } from "@/integrations/supabase/client";
-import {
-  Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription,
-} from "@/components/ui/sheet";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -20,6 +16,15 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
   DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Habit, HabitLog, IconKey, Nudge, Pair, Profile, Reaction, TimeOfDay,
+  addDays, dateStr, haptic, todayStr,
+} from "@/components/pairup/types";
+import { HabitCard, HabitForm, HabitSkeleton } from "@/components/pairup/HabitCard";
+import { NudgeSheet } from "@/components/pairup/NudgeSheet";
+import { SettingsDrawer } from "@/components/pairup/SettingsDrawer";
+import { RewardedVideoDialog } from "@/components/pairup/RewardedVideo";
+import { DayStat, MonthlyCalendar, WeeklyRibbon } from "@/components/pairup/History";
 
 export const Route = createFileRoute("/_authenticated/app")({
   head: () => ({
@@ -35,46 +40,7 @@ export const Route = createFileRoute("/_authenticated/app")({
   component: Dashboard,
 });
 
-/* ---------------------- types & icons ---------------------- */
-
-type IconKey = "check" | "run" | "book" | "water" | "sleep" | "brain" | "heart" | "sun";
-const ICONS: Record<IconKey, React.ComponentType<{ className?: string }>> = {
-  check: Check, run: Dumbbell, book: BookOpen, water: Droplet, sleep: Moon,
-  brain: Brain, heart: Heart, sun: Sun,
-};
-const ICON_ORDER: IconKey[] = ["check", "run", "book", "water", "sleep", "brain", "heart", "sun"];
-const EMOJIS = ["🙂", "😎", "🦊", "🐻", "🐼", "🐸", "🚀", "🌸", "⚡️", "🔥", "🌈", "🍀"];
-const TIMEZONES = [
-  "UTC", "America/Los_Angeles", "America/Denver", "America/Chicago", "America/New_York",
-  "Europe/London", "Europe/Paris", "Europe/Berlin", "Asia/Tokyo", "Asia/Singapore",
-  "Asia/Kolkata", "Australia/Sydney",
-];
-
-type Profile = {
-  id: string;
-  display_name: string;
-  avatar_emoji: string;
-  timezone: string;
-  reminder_time: string | null;
-  active_pair_id: string | null;
-};
-type Pair = {
-  id: string;
-  invite_code: string;
-  user1_id: string;
-  user2_id: string | null;
-  current_streak: number;
-  longest_streak: number;
-  last_completed_date: string | null;
-  archived: boolean;
-  created_at: string;
-};
-type Habit = { id: string; pair_id: string; title: string; icon: string; position: number };
-type HabitLog = { id: string; habit_id: string; user_id: string; log_date: string };
-
-const today = () => new Date().toISOString().slice(0, 10);
-
-/* ---------------------- root ---------------------- */
+const HISTORY_DAYS = 62;
 
 function Dashboard() {
   const navigate = useNavigate();
@@ -84,110 +50,174 @@ function Dashboard() {
   const [profiles, setProfiles] = useState<Record<string, Profile>>({});
   const [habits, setHabits] = useState<Habit[]>([]);
   const [logs, setLogs] = useState<HabitLog[]>([]);
+  const [reactions, setReactions] = useState<Reaction[]>([]);
+  const [nudges, setNudges] = useState<Nudge[]>([]);
   const [loading, setLoading] = useState(true);
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  const [nudgeSent, setNudgeSent] = useState(false);
 
-  // Load session + profile
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [nudgeOpen, setNudgeOpen] = useState(false);
+  const [nudgeHabitId, setNudgeHabitId] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false);
+  const [confirmDeleteHabit, setConfirmDeleteHabit] = useState<Habit | null>(null);
+  const [rv, setRv] = useState<null | "habit" | "partner">(null);
+  const [celebrated, setCelebrated] = useState<string | null>(null);
+  const [showCelebration, setShowCelebration] = useState(false);
+
+  /* ------------------------- loaders ------------------------- */
+  const refreshProfile = useCallback(async (uid: string) => {
+    const { data } = await supabase.from("profiles").select("*").eq("id", uid).maybeSingle();
+    if (data) setProfile(data as Profile);
+  }, []);
+
+  const loadPairs = useCallback(async (uid: string) => {
+    const { data } = await supabase.from("pairs").select("*")
+      .or(`user1_id.eq.${uid},user2_id.eq.${uid}`).eq("archived", false)
+      .order("created_at", { ascending: true });
+    setPairs((data as Pair[] | null) ?? []);
+  }, []);
+
   useEffect(() => {
     (async () => {
       const { data: userData } = await supabase.auth.getUser();
       if (!userData.user) return;
       setUserId(userData.user.id);
-      const { data: p } = await supabase.from("profiles").select("*").eq("id", userData.user.id).maybeSingle();
-      if (p) setProfile(p as Profile);
+      await refreshProfile(userData.user.id);
     })();
-  }, []);
+  }, [refreshProfile]);
 
-  // Load pairs when user known
-  const loadPairs = async (uid: string) => {
-    const { data } = await supabase
-      .from("pairs")
-      .select("*")
-      .or(`user1_id.eq.${uid},user2_id.eq.${uid}`)
-      .eq("archived", false)
-      .order("created_at", { ascending: true });
-    setPairs((data as Pair[] | null) ?? []);
-  };
-  useEffect(() => { if (userId) loadPairs(userId); }, [userId]);
+  useEffect(() => { if (userId) loadPairs(userId); }, [userId, loadPairs]);
 
-  // Load partner profiles + habits + today logs for active pair
   const activePair = useMemo(
     () => pairs.find((p) => p.id === profile?.active_pair_id) ?? pairs[0] ?? null,
     [pairs, profile?.active_pair_id],
   );
 
-  useEffect(() => {
-    if (!activePair) { setHabits([]); setLogs([]); return; }
-    setLoading(true);
-    (async () => {
-      const [habitsRes, logsRes] = await Promise.all([
-        supabase.from("habits").select("*").eq("pair_id", activePair.id).order("position"),
-        supabase.from("habit_logs").select("*").eq("log_date", today()),
-      ]);
-      setHabits((habitsRes.data as Habit[] | null) ?? []);
-      setLogs((logsRes.data as HabitLog[] | null) ?? []);
-      // Load partner profile
-      const otherId = activePair.user1_id === userId ? activePair.user2_id : activePair.user1_id;
-      if (otherId && !profiles[otherId]) {
-        const { data } = await supabase.from("profiles").select("*").eq("id", otherId).maybeSingle();
-        if (data) setProfiles((prev) => ({ ...prev, [otherId]: data as Profile }));
-      }
-      setLoading(false);
-    })();
-  }, [activePair?.id, userId]);
+  const partnerId = activePair ? (activePair.user1_id === userId ? activePair.user2_id : activePair.user1_id) : null;
+  const partner = partnerId ? profiles[partnerId] : null;
 
-  // Realtime for active pair
+  const loadPairData = useCallback(async (pair: Pair, uid: string) => {
+    const since = dateStr(addDays(new Date(), -HISTORY_DAYS));
+    const { data: habitRows } = await supabase.from("habits").select("*").eq("pair_id", pair.id).order("position");
+    const hs = (habitRows as Habit[] | null) ?? [];
+    setHabits(hs);
+
+    const ids = hs.map((h) => h.id);
+    if (ids.length) {
+      const { data: logRows } = await supabase.from("habit_logs").select("*").in("habit_id", ids).gte("log_date", since);
+      const ls = (logRows as HabitLog[] | null) ?? [];
+      setLogs(ls);
+      const todayLogIds = ls.filter((l) => l.log_date === todayStr()).map((l) => l.id);
+      if (todayLogIds.length) {
+        const { data: rx } = await supabase.from("reactions").select("*").in("habit_log_id", todayLogIds);
+        setReactions((rx as Reaction[] | null) ?? []);
+      } else setReactions([]);
+    } else { setLogs([]); setReactions([]); }
+
+    const { data: nz } = await supabase.from("nudges").select("*").eq("pair_id", pair.id)
+      .order("created_at", { ascending: false }).limit(20);
+    setNudges((nz as Nudge[] | null) ?? []);
+
+    const otherId = pair.user1_id === uid ? pair.user2_id : pair.user1_id;
+    if (otherId) {
+      const { data } = await supabase.from("profiles").select("*").eq("id", otherId).maybeSingle();
+      if (data) setProfiles((prev) => ({ ...prev, [otherId]: data as Profile }));
+    }
+  }, []);
+
   useEffect(() => {
-    if (!activePair) return;
+    if (!activePair || !userId) { setHabits([]); setLogs([]); setLoading(false); return; }
+    setLoading(true);
+    loadPairData(activePair, userId).finally(() => setLoading(false));
+  }, [activePair?.id, userId, loadPairData]);
+
+  /* ------------------------- realtime ------------------------- */
+  useEffect(() => {
+    if (!activePair || !userId) return;
+    const reload = () => loadPairData(activePair, userId);
     const channel = supabase
       .channel(`pair:${activePair.id}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "habits", filter: `pair_id=eq.${activePair.id}` }, () => {
-        supabase.from("habits").select("*").eq("pair_id", activePair.id).order("position").then(({ data }) => setHabits((data as Habit[] | null) ?? []));
-      })
-      .on("postgres_changes", { event: "*", schema: "public", table: "habit_logs" }, () => {
-        supabase.from("habit_logs").select("*").eq("log_date", today()).then(({ data }) => setLogs((data as HabitLog[] | null) ?? []));
+      .on("postgres_changes", { event: "*", schema: "public", table: "habits", filter: `pair_id=eq.${activePair.id}` }, reload)
+      .on("postgres_changes", { event: "*", schema: "public", table: "habit_logs" }, reload)
+      .on("postgres_changes", { event: "*", schema: "public", table: "reactions" }, reload)
+      .on("postgres_changes", { event: "*", schema: "public", table: "nudges", filter: `pair_id=eq.${activePair.id}` }, (payload) => {
+        const n = payload.new as Nudge | undefined;
+        if (n && n.recipient_id === userId) toast(n.message, { icon: "🔔" });
+        reload();
       })
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "pairs", filter: `id=eq.${activePair.id}` }, (payload) => {
         setPairs((prev) => prev.map((p) => (p.id === activePair.id ? { ...p, ...(payload.new as Pair) } : p)));
       })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [activePair?.id]);
+  }, [activePair?.id, userId, loadPairData]);
 
-  const partnerId = activePair ? (activePair.user1_id === userId ? activePair.user2_id : activePair.user1_id) : null;
-  const partner = partnerId ? profiles[partnerId] : null;
+  /* ------------------------- derived ------------------------- */
+  const today = todayStr();
+  const todayLogs = logs.filter((l) => l.log_date === today);
+  const myLogByHabit = new Map(todayLogs.filter((l) => l.user_id === userId).map((l) => [l.habit_id, l]));
+  const theirLogByHabit = new Map(todayLogs.filter((l) => l.user_id === partnerId).map((l) => [l.habit_id, l]));
+  const myDone = habits.filter((h) => myLogByHabit.has(h.id)).length;
+  const theirDone = habits.filter((h) => theirLogByHabit.has(h.id)).length;
+  const bothCompleteAll = habits.length > 0 && myDone === habits.length && theirDone === habits.length;
 
-  const myLogs = new Set(logs.filter((l) => l.user_id === userId).map((l) => l.habit_id));
-  const partnerLogs = new Set(logs.filter((l) => l.user_id === partnerId).map((l) => l.habit_id));
+  const stats: DayStat[] = useMemo(() => {
+    const total = habits.length;
+    return Array.from({ length: HISTORY_DAYS + 1 }, (_, i) => {
+      const date = dateStr(addDays(new Date(), i - HISTORY_DAYS));
+      const day = logs.filter((l) => l.log_date === date);
+      return {
+        date,
+        mine: new Set(day.filter((l) => l.user_id === userId).map((l) => l.habit_id)).size,
+        theirs: new Set(day.filter((l) => l.user_id === partnerId).map((l) => l.habit_id)).size,
+        total,
+      };
+    });
+  }, [logs, habits.length, userId, partnerId]);
 
-  const bothCompleteAll = habits.length > 0 && habits.every((h) => myLogs.has(h.id) && partnerLogs.has(h.id));
+  useEffect(() => {
+    if (bothCompleteAll && celebrated !== `${activePair?.id}:${today}`) {
+      setShowCelebration(true);
+      setCelebrated(`${activePair?.id}:${today}`);
+      haptic(40);
+    }
+  }, [bothCompleteAll, activePair?.id, today, celebrated]);
 
-  /* actions */
+  const streakBroken = !!activePair && activePair.current_streak === 0 && activePair.longest_streak > 0;
+  const freezeUsedThisMonth = activePair?.freeze_used_month === today.slice(0, 7);
+  const habitSlots = activePair?.habit_slots ?? 3;
+
+  /* ------------------------- actions ------------------------- */
   const toggleHabit = async (habit: Habit) => {
     if (!userId) return;
-    const done = myLogs.has(habit.id);
-    if (done) {
-      await supabase.from("habit_logs").delete().eq("habit_id", habit.id).eq("user_id", userId).eq("log_date", today());
+    const existing = myLogByHabit.get(habit.id);
+    if (existing) {
+      setLogs((prev) => prev.filter((l) => l.id !== existing.id));
+      await supabase.from("habit_logs").delete().eq("id", existing.id);
     } else {
-      await supabase.from("habit_logs").insert({ habit_id: habit.id, user_id: userId, log_date: today() });
+      const { data, error } = await supabase.from("habit_logs")
+        .insert({ habit_id: habit.id, user_id: userId, log_date: today }).select().single();
+      if (error) { toast.error(error.message); return; }
+      setLogs((prev) => [...prev, data as HabitLog]);
     }
-    // optimistic refresh
-    const { data } = await supabase.from("habit_logs").select("*").eq("log_date", today());
-    setLogs((data as HabitLog[] | null) ?? []);
+    if (activePair) loadPairs(userId);
   };
 
-  const addHabit = async (title: string, icon: IconKey) => {
+  const addHabit = async (v: { title: string; icon: IconKey; time_of_day: TimeOfDay }) => {
     if (!activePair) return;
-    if (habits.length >= 3) { toast.error("Max 3 habits per pair"); return; }
     const { error } = await supabase.from("habits").insert({
-      pair_id: activePair.id, title, icon, position: habits.length,
+      pair_id: activePair.id, title: v.title, icon: v.icon, time_of_day: v.time_of_day, position: habits.length,
     });
     if (error) { toast.error(error.message); return; }
+    setAdding(false);
     toast.success("Habit added");
   };
 
-  const [confirmDeleteHabit, setConfirmDeleteHabit] = useState<Habit | null>(null);
+  const editHabit = async (habit: Habit, patch: { title: string; icon: IconKey; time_of_day: TimeOfDay }) => {
+    const { error } = await supabase.from("habits").update(patch).eq("id", habit.id);
+    if (error) { toast.error(error.message); return; }
+    toast.success("Habit updated");
+  };
+
   const deleteHabit = async () => {
     if (!confirmDeleteHabit) return;
     await supabase.from("habits").delete().eq("id", confirmDeleteHabit.id);
@@ -195,20 +225,61 @@ function Dashboard() {
     toast.success("Habit removed");
   };
 
+  const react = async (log: HabitLog, emoji: string, comment?: string) => {
+    if (!userId) return;
+    const { error } = await supabase.from("reactions").insert({
+      habit_log_id: log.id, user_id: userId, emoji, comment: comment ?? null,
+    });
+    if (error) toast.error(error.message);
+  };
+
+  const sendNudge = async (message: string, habitId: string | null) => {
+    if (!activePair || !partnerId || !userId) return;
+    const { error } = await supabase.from("nudges").insert({
+      pair_id: activePair.id, sender_id: userId, recipient_id: partnerId,
+      habit_id: habitId, message, kind: "preset",
+    });
+    if (error) {
+      toast.error(error.message.includes("rate") || error.message.includes("once")
+        ? "Easy tiger — one nudge per habit per hour 🙂" : error.message);
+      return;
+    }
+    haptic(20);
+    toast.success(`Nudge sent to ${partner?.display_name ?? "your partner"}!`);
+  };
+
+  const useFreeze = async () => {
+    if (!activePair) return;
+    const { error } = await supabase.rpc("use_streak_freeze", { _pair_id: activePair.id });
+    if (error) { toast.error(error.message); return; }
+    toast.success("Streak Freeze applied — your streak is safe ❄️");
+    if (userId) loadPairs(userId);
+  };
+
+  const unlockHabitSlot = async () => {
+    if (!activePair) return;
+    const { error } = await supabase.rpc("unlock_habit_slot", { _pair_id: activePair.id });
+    if (error) { toast.error(error.message); return; }
+    toast.success("4th habit row unlocked! 🎉");
+    if (userId) loadPairs(userId);
+  };
+
+  const unlockPartnerSlot = async () => {
+    const { error } = await supabase.rpc("unlock_partner_slot");
+    if (error) { toast.error(error.message); return; }
+    toast.success("2nd partner slot unlocked! 🎉");
+    if (userId) await refreshProfile(userId);
+  };
+
   const copyInvite = async () => {
     if (!activePair) return;
-    try {
-      await navigator.clipboard.writeText(activePair.invite_code);
-      toast.success("Invite code copied!");
-    } catch {}
+    try { await navigator.clipboard.writeText(activePair.invite_code); toast.success("Invite code copied!"); haptic(); } catch { /* denied */ }
   };
 
   const switchPair = async (pairId: string) => {
     await supabase.rpc("switch_active_pair", { _pair_id: pairId });
-    if (userId) {
-      const { data } = await supabase.from("profiles").select("*").eq("id", userId).maybeSingle();
-      if (data) setProfile(data as Profile);
-    }
+    if (userId) await refreshProfile(userId);
+    setSettingsOpen(false);
   };
 
   const signOut = async () => {
@@ -220,52 +291,192 @@ function Dashboard() {
     return <div className="grid min-h-dvh place-items-center text-muted-foreground">Loading…</div>;
   }
 
+  const partnerName = partner?.display_name ?? "your partner";
+
   return (
     <div className="min-h-dvh bg-background text-foreground">
-      <div className="mx-auto flex min-h-dvh w-full max-w-[440px] flex-col">
+      {/* ambient background */}
+      <div aria-hidden className="pointer-events-none fixed inset-0 overflow-hidden">
+        <div className="absolute -left-24 -top-24 h-72 w-72 rounded-full bg-primary/15 blur-3xl" />
+        <div className="absolute -right-20 top-40 h-64 w-64 rounded-full bg-secondary/10 blur-3xl" />
+        <div className="absolute bottom-0 left-1/3 h-72 w-72 rounded-full bg-success/10 blur-3xl" />
+      </div>
+
+      <div className="relative mx-auto flex min-h-dvh w-full max-w-[440px] flex-col">
         {!activePair ? (
           <Onboarding
-            onCreated={async () => { if (userId) await loadPairs(userId); const { data } = await supabase.from("profiles").select("*").eq("id", userId).maybeSingle(); if (data) setProfile(data as Profile); }}
-            onSettings={() => setSettingsOpen(true)}
             profile={profile}
+            onSettings={() => setSettingsOpen(true)}
+            onCreated={async () => { await loadPairs(userId); await refreshProfile(userId); }}
           />
         ) : (
-          <motion.div key={activePair.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="flex flex-1 flex-col pb-28">
-            <Header
-              profile={profile}
-              partner={partner}
-              pairs={pairs}
-              profiles={profiles}
-              activePair={activePair}
-              onSwitch={switchPair}
-              onCopy={copyInvite}
-              onSettings={() => setSettingsOpen(true)}
-              userId={userId}
+          <motion.div key={activePair.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="flex flex-1 flex-col pb-32">
+            {/* header */}
+            <div className="flex items-start justify-between px-6 pt-6">
+              <img src={logo.url} alt="PairUp" className="h-9 w-auto" />
+              <div className="flex items-start gap-3">
+                <PersonPill emoji={profile.avatar_emoji} name={profile.display_name} done={myDone} total={habits.length} onClick={() => setSettingsOpen(true)} highlight />
+                <PersonPill emoji={partner?.avatar_emoji ?? "➕"} name={partner?.display_name ?? "Invite"} done={theirDone} total={habits.length} onClick={copyInvite} />
+              </div>
+            </div>
+
+            {/* invite + switcher row */}
+            <div className="mt-4 flex items-center gap-2 px-6">
+              <button onClick={copyInvite} className="inline-flex items-center gap-2 rounded-full bg-primary-soft px-3 py-1.5 text-xs font-bold text-primary transition active:scale-95">
+                <Copy className="h-3 w-3" /> {activePair.invite_code}
+              </button>
+              {pairs.length > 1 && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger className="inline-flex items-center gap-1.5 rounded-full bg-secondary-soft px-3 py-1.5 text-xs font-bold text-secondary">
+                    <Users className="h-3 w-3" /> {partnerName} <ChevronDown className="h-3 w-3" />
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start">
+                    <DropdownMenuLabel>Switch partner</DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    {pairs.map((p) => {
+                      const oid = p.user1_id === userId ? p.user2_id : p.user1_id;
+                      return (
+                        <DropdownMenuItem key={p.id} onClick={() => switchPair(p.id)}>
+                          {(oid && profiles[oid]?.display_name) || `Code ${p.invite_code}`} · 🔥 {p.current_streak}
+                        </DropdownMenuItem>
+                      );
+                    })}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
+            </div>
+
+            <StreakHero
+              streak={activePair.current_streak}
+              longest={activePair.longest_streak}
+              complete={bothCompleteAll}
+              myDone={myDone}
+              theirDone={theirDone}
+              total={habits.length}
+              partnerName={partnerName}
+              you={profile.display_name}
             />
-            <StreakBanner streak={activePair.current_streak} longest={activePair.longest_streak} active={bothCompleteAll} />
-            <PartnerStatus profile={profile} partner={partner} habits={habits} myLogs={myLogs} partnerLogs={partnerLogs} />
+
+            {streakBroken && (
+              <div className="mx-6 mt-4 rounded-3xl border-2 border-dashed border-primary/30 bg-primary-soft p-5">
+                <div className="text-sm font-bold text-primary">Streak reset — no big deal 💛</div>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  You reached {activePair.longest_streak} days once, so you already know you can. Check one habit off together to start again.
+                </p>
+                <button onClick={useFreeze} disabled={freezeUsedThisMonth}
+                  className="mt-3 inline-flex items-center gap-2 rounded-full bg-surface px-4 py-2 text-xs font-bold text-secondary disabled:opacity-50">
+                  <Snowflake className="h-3.5 w-3.5" />
+                  {freezeUsedThisMonth ? "Freeze used this month" : "Use free monthly Streak Freeze"}
+                </button>
+              </div>
+            )}
+
             {!partner && <PendingPartner code={activePair.invite_code} onCopy={copyInvite} />}
-            <HabitList
-              habits={habits}
-              myLogs={myLogs}
-              partnerLogs={partnerLogs}
-              partnerName={partner?.display_name ?? "your partner"}
-              onToggle={toggleHabit}
-              onRequestDelete={setConfirmDeleteHabit}
-              onAdd={addHabit}
-              loading={loading}
-            />
-            {partner && (
-              <NudgeBar
-                partnerName={partner.display_name}
-                partnerPending={habits.some((h) => !partnerLogs.has(h.id))}
-                sent={nudgeSent}
-                onSend={() => { setNudgeSent(true); toast.success(`Nudge sent to ${partner.display_name}!`); setTimeout(() => setNudgeSent(false), 2500); }}
-              />
+
+            <WeeklyRibbon stats={stats} />
+
+            {/* habits */}
+            <div className="mt-6 px-6">
+              <div className="mb-3 flex items-center justify-between">
+                <h2 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Today's habits</h2>
+                <span className="text-xs font-bold text-muted-foreground">{habits.length}/{habitSlots}</span>
+              </div>
+
+              <div className="space-y-3">
+                {loading ? (
+                  <><HabitSkeleton /><HabitSkeleton /><HabitSkeleton /></>
+                ) : habits.length === 0 && !adding ? (
+                  <div className="rounded-3xl bg-surface p-8 text-center shadow-[var(--shadow-card)]">
+                    <div className="text-4xl">🌱</div>
+                    <div className="mt-2 text-sm font-bold">Create your first micro-habit</div>
+                    <p className="mt-1 text-xs text-muted-foreground">Something tiny you can both do daily — 10 push-ups, one page, one glass of water.</p>
+                    <button onClick={() => setAdding(true)} className="mt-4 rounded-full bg-primary px-5 py-2.5 text-sm font-bold text-primary-foreground shadow-[var(--shadow-primary)]">
+                      Add a habit
+                    </button>
+                  </div>
+                ) : (
+                  habits.map((h) => (
+                    <HabitCard
+                      key={h.id}
+                      habit={h}
+                      myLog={myLogByHabit.get(h.id)}
+                      theirLog={theirLogByHabit.get(h.id)}
+                      partnerName={partnerName}
+                      reactions={reactions.filter((r) => r.habit_log_id === theirLogByHabit.get(h.id)?.id)}
+                      onToggle={() => toggleHabit(h)}
+                      onEdit={(patch) => editHabit(h, patch)}
+                      onDelete={() => setConfirmDeleteHabit(h)}
+                      onReact={react}
+                      onNudge={() => { setNudgeHabitId(h.id); setNudgeOpen(true); }}
+                    />
+                  ))
+                )}
+
+                {adding && <HabitForm submitLabel="Add habit" onCancel={() => setAdding(false)} onSubmit={addHabit} />}
+
+                {!adding && habits.length > 0 && habits.length < habitSlots && (
+                  <button onClick={() => setAdding(true)}
+                    className="flex w-full items-center justify-center gap-2 rounded-3xl border-2 border-dashed border-border py-4 text-sm font-bold text-muted-foreground transition active:scale-[0.99]">
+                    <Plus className="h-4 w-4" /> Add new habit
+                  </button>
+                )}
+
+                {!adding && habits.length >= habitSlots && habitSlots < 4 && (
+                  <button onClick={() => setRv("habit")}
+                    className="flex w-full items-center justify-center gap-2 rounded-3xl border-2 border-dashed border-primary/40 bg-primary-soft py-4 text-xs font-bold text-primary transition active:scale-[0.99]">
+                    <PlayCircle className="h-4 w-4" /> Watch a short video to unlock a 4th habit row
+                  </button>
+                )}
+                {!adding && habits.length >= habitSlots && habitSlots >= 4 && (
+                  <p className="text-center text-xs text-muted-foreground">You're at the max of {habitSlots} habits — keep it focused 💪</p>
+                )}
+              </div>
+            </div>
+
+            <MonthlyCalendar stats={stats} />
+
+            {/* freeze card */}
+            {!streakBroken && (
+              <div className="mx-6 mt-4 flex items-center gap-3 rounded-3xl bg-surface px-5 py-4 shadow-[var(--shadow-card)]">
+                <span className="grid h-10 w-10 place-items-center rounded-xl bg-secondary-soft text-secondary"><Snowflake className="h-5 w-5" /></span>
+                <div className="flex-1">
+                  <div className="text-sm font-bold">Streak Freeze</div>
+                  <div className="text-xs text-muted-foreground">{freezeUsedThisMonth ? "Used this month — extras come with Pro" : "1 free save per month if life gets in the way"}</div>
+                </div>
+                <button onClick={freezeUsedThisMonth ? () => toast("Extra freezes are part of Pro ✨") : useFreeze}
+                  className="rounded-full bg-secondary px-4 py-2 text-xs font-bold text-secondary-foreground">
+                  {freezeUsedThisMonth ? "Get Pro" : "Use"}
+                </button>
+              </div>
             )}
           </motion.div>
         )}
       </div>
+
+      {/* bottom nav */}
+      {activePair && (
+        <nav className="fixed inset-x-0 bottom-0 z-30 mx-auto w-full max-w-[440px] px-6 pb-5">
+          <div className="flex items-center justify-around rounded-full bg-surface/95 px-2 py-2 shadow-[0_-6px_30px_rgba(0,0,0,0.08)] backdrop-blur">
+            <NavBtn icon={Home} label="Home" active onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })} />
+            <button onClick={() => { setNudgeHabitId(null); setNudgeOpen(true); }}
+              className="-mt-8 grid h-16 w-16 place-items-center rounded-full bg-primary text-primary-foreground shadow-[var(--shadow-primary)] transition active:scale-90">
+              <Bell className="h-6 w-6" />
+            </button>
+            <NavBtn icon={Users} label="Settings" onClick={() => setSettingsOpen(true)} />
+          </div>
+        </nav>
+      )}
+
+      <NudgeSheet
+        open={nudgeOpen}
+        onOpenChange={setNudgeOpen}
+        partnerName={partnerName}
+        habits={habits}
+        defaultHabitId={nudgeHabitId}
+        recent={nudges}
+        userId={userId}
+        onSend={sendNudge}
+      />
 
       <SettingsDrawer
         open={settingsOpen}
@@ -275,11 +486,36 @@ function Dashboard() {
         profiles={profiles}
         activePairId={activePair?.id ?? null}
         userId={userId}
-        onProfileChanged={(p) => setProfile(p)}
+        onProfileChanged={setProfile}
         onSwitch={switchPair}
         onSignOut={signOut}
-        onPairsChanged={async () => { if (userId) await loadPairs(userId); }}
-        onAddPartner={async () => { if (userId) await loadPairs(userId); const { data } = await supabase.from("profiles").select("*").eq("id", userId).maybeSingle(); if (data) setProfile(data as Profile); }}
+        onPairsChanged={async () => { await loadPairs(userId); await refreshProfile(userId); }}
+        onAddPartner={async () => { await loadPairs(userId); await refreshProfile(userId); }}
+        onUnlockPartner={() => { setSettingsOpen(false); setRv("partner"); }}
+      />
+
+      <RewardedVideoDialog
+        open={rv === "habit"}
+        onOpenChange={(o) => !o && setRv(null)}
+        title="Unlock a 4th habit"
+        description="Watch a short video to add one more habit row for this pair — today and every day."
+        rewardLabel="Unlock 4th habit"
+        onReward={unlockHabitSlot}
+      />
+      <RewardedVideoDialog
+        open={rv === "partner"}
+        onOpenChange={(o) => !o && setRv(null)}
+        title="Unlock a 2nd partner"
+        description="One partner is free. Watch a short video to add a second accountability buddy with their own streak."
+        rewardLabel="Unlock 2nd partner"
+        onReward={unlockPartnerSlot}
+      />
+
+      <CelebrationModal
+        open={showCelebration}
+        streak={activePair?.current_streak ?? 0}
+        partnerName={partnerName}
+        onClose={() => setShowCelebration(false)}
       />
 
       <AlertDialog open={!!confirmDeleteHabit} onOpenChange={(o) => !o && setConfirmDeleteHabit(null)}>
@@ -300,15 +536,118 @@ function Dashboard() {
   );
 }
 
-/* ---------------------- onboarding (no pair yet) ---------------------- */
+/* ---------------------- pieces ---------------------- */
 
-function Onboarding({
-  onCreated, onSettings, profile,
-}: {
-  onCreated: () => Promise<void>;
-  onSettings: () => void;
-  profile: Profile;
+function NavBtn({ icon: Icon, label, active, onClick }: { icon: React.ComponentType<{ className?: string }>; label: string; active?: boolean; onClick: () => void }) {
+  return (
+    <button onClick={onClick} className={`flex w-20 flex-col items-center gap-0.5 rounded-full py-2 text-[11px] font-bold ${active ? "text-primary" : "text-muted-foreground"}`}>
+      <Icon className="h-5 w-5" />
+      {label}
+    </button>
+  );
+}
+
+function PersonPill({ emoji, name, done, total, onClick, highlight }: {
+  emoji: string; name: string; done: number; total: number; onClick: () => void; highlight?: boolean;
 }) {
+  const complete = total > 0 && done >= total;
+  return (
+    <button onClick={onClick} className="flex w-16 flex-col items-center gap-1 transition active:scale-95">
+      <span className={`relative grid h-12 w-12 place-items-center rounded-full text-xl shadow-[var(--shadow-card)] ${complete ? "bg-success-soft ring-2 ring-success" : highlight ? "bg-primary-soft ring-2 ring-primary/40" : "bg-surface"}`}>
+        {emoji}
+        {total > 0 && (
+          <span className={`absolute -bottom-1 rounded-full px-1.5 text-[10px] font-bold ${complete ? "bg-success text-success-foreground" : "bg-muted text-muted-foreground"}`}>
+            {done}/{total}
+          </span>
+        )}
+      </span>
+      <span className="w-full truncate text-center text-[11px] font-bold text-muted-foreground">{name}</span>
+    </button>
+  );
+}
+
+function StreakHero({ streak, longest, complete, myDone, theirDone, total, partnerName, you }: {
+  streak: number; longest: number; complete: boolean; myDone: number; theirDone: number; total: number; partnerName: string; you: string;
+}) {
+  const pct = total > 0 ? Math.round(((myDone + theirDone) / (total * 2)) * 100) : 0;
+  const R = 52, C = 2 * Math.PI * R;
+  return (
+    <div className="mx-6 mt-5 overflow-hidden rounded-[32px] bg-gradient-to-br from-primary via-[#ff7f45] to-[#ff9d3d] p-6 text-primary-foreground shadow-[var(--shadow-primary)]">
+      <div className="flex items-center gap-5">
+        <div className="relative grid h-32 w-32 shrink-0 place-items-center">
+          <svg viewBox="0 0 120 120" className="absolute inset-0 -rotate-90">
+            <circle cx="60" cy="60" r={R} fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="10" />
+            <motion.circle cx="60" cy="60" r={R} fill="none" stroke="white" strokeWidth="10" strokeLinecap="round"
+              strokeDasharray={C} animate={{ strokeDashoffset: C - (C * pct) / 100 }} transition={{ duration: 0.8, ease: "easeOut" }} />
+          </svg>
+          <div className={`text-center ${complete ? "animate-flame" : ""}`}>
+            <div className="text-[40px] font-bold leading-none">{streak}</div>
+            <div className="text-[11px] font-bold uppercase tracking-widest opacity-90">days</div>
+          </div>
+        </div>
+        <div className="min-w-0">
+          <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider opacity-90">
+            <Flame className="h-3.5 w-3.5" fill="currentColor" /> Shared streak
+          </div>
+          <div className="mt-1 text-[15px] font-bold leading-snug">
+            {complete ? "Today is locked in. Legendary." : total === 0 ? "Add a habit to get going" : pct === 0 ? "Nobody's checked in yet" : "Keep it moving!"}
+          </div>
+          <div className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-white/20 px-3 py-1 text-[11px] font-bold">
+            <Trophy className="h-3 w-3" /> Best: {longest} days
+          </div>
+          <div className="mt-2 space-y-0.5 text-[11px] font-semibold opacity-95">
+            <div>{you}: {myDone}/{total || 0}</div>
+            <div>{partnerName}: {theirDone}/{total || 0}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PendingPartner({ code, onCopy }: { code: string; onCopy: () => void }) {
+  return (
+    <div className="mx-6 mt-4 rounded-3xl bg-secondary-soft p-5 text-center">
+      <div className="text-sm font-bold text-secondary">Waiting for your partner to join</div>
+      <div className="mt-2 font-mono text-2xl font-bold tracking-[0.25em] text-secondary">{code}</div>
+      <button onClick={onCopy} className="mt-3 inline-flex items-center gap-2 rounded-full bg-surface px-4 py-2 text-xs font-bold text-secondary">
+        <Copy className="h-3.5 w-3.5" /> Copy invite code
+      </button>
+    </div>
+  );
+}
+
+function CelebrationModal({ open, streak, partnerName, onClose }: { open: boolean; streak: number; partnerName: string; onClose: () => void }) {
+  return (
+    <AnimatePresence>
+      {open && (
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+          className="fixed inset-0 z-50 grid place-items-center bg-foreground/70 p-6 backdrop-blur-sm" onClick={onClose}>
+          {Array.from({ length: 24 }).map((_, i) => (
+            <motion.span key={i} className="pointer-events-none absolute h-3 w-3 rounded-full"
+              style={{ background: ["#ff6a2d", "#0060ac", "#06925a", "#ffb347"][i % 4] }}
+              initial={{ x: 0, y: 0, opacity: 1 }}
+              animate={{ x: (Math.random() - 0.5) * 500, y: (Math.random() - 0.5) * 700, opacity: 0, rotate: 360 }}
+              transition={{ duration: 1.6, delay: i * 0.02 }} />
+          ))}
+          <motion.div initial={{ scale: 0.8, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, opacity: 0 }}
+            className="relative w-full max-w-[320px] rounded-[32px] bg-surface p-8 text-center shadow-2xl">
+            <div className="animate-flame text-6xl">🔥</div>
+            <h3 className="mt-3 text-2xl font-bold">Day {streak} complete!</h3>
+            <p className="mt-2 text-sm text-muted-foreground">You and {partnerName} both finished everything today. That's how streaks are built.</p>
+            <button onClick={onClose} className="mt-5 w-full rounded-full bg-primary px-5 py-3 text-sm font-bold text-primary-foreground shadow-[var(--shadow-primary)]">
+              <Sparkles className="mr-1 inline h-4 w-4" /> Nice
+            </button>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}
+
+/* ---------------------- onboarding ---------------------- */
+
+function Onboarding({ onCreated, onSettings, profile }: { onCreated: () => Promise<void>; onSettings: () => void; profile: Profile }) {
   const [mode, setMode] = useState<"choose" | "create" | "join">("choose");
   const [joinCode, setJoinCode] = useState("");
   const [busy, setBusy] = useState(false);
@@ -319,7 +658,6 @@ function Onboarding({
     const { data, error } = await supabase.rpc("create_pair");
     setBusy(false);
     if (error) { toast.error(error.message); return; }
-    // fetch code
     const { data: p } = await supabase.from("pairs").select("invite_code").eq("id", data as string).single();
     setCreatedCode(p?.invite_code ?? null);
     await onCreated();
@@ -334,17 +672,19 @@ function Onboarding({
   };
   const copy = async () => {
     if (!createdCode) return;
-    try { await navigator.clipboard.writeText(createdCode); toast.success("Invite code copied!"); } catch {}
+    try { await navigator.clipboard.writeText(createdCode); toast.success("Invite code copied!"); } catch { /* denied */ }
   };
 
   return (
     <div className="flex flex-1 flex-col px-6 pb-10 pt-8">
-      <div className="flex items-center justify-between">
-        <img src={logo.url} alt="PairUp" className="h-8 w-auto" />
-        <button onClick={onSettings} className="grid h-10 w-10 place-items-center rounded-full bg-surface shadow-[var(--shadow-card)]">
-          <div className="text-lg">{profile.avatar_emoji}</div>
+      <div className="flex items-start justify-between">
+        <img src={logo.url} alt="PairUp" className="h-9 w-auto" />
+        <button onClick={onSettings} className="flex w-16 flex-col items-center gap-1">
+          <span className="grid h-12 w-12 place-items-center rounded-full bg-surface text-xl shadow-[var(--shadow-card)]">{profile.avatar_emoji}</span>
+          <span className="w-full truncate text-center text-[11px] font-bold text-muted-foreground">{profile.display_name}</span>
         </button>
       </div>
+
       <div className="mt-10 text-center">
         <h1 className="text-balance text-[30px] font-bold leading-tight tracking-tight">
           Hi {profile.display_name}! <span className="block text-primary">Let's find your pair.</span>
@@ -357,14 +697,14 @@ function Onboarding({
       <div className="mt-8 flex-1">
         {mode === "choose" && (
           <div className="flex flex-col gap-3">
-            <button onClick={() => setMode("create")} className="group flex items-center justify-between rounded-3xl bg-primary px-6 py-5 text-primary-foreground shadow-[var(--shadow-primary)] transition active:scale-[0.98]">
+            <button onClick={() => setMode("create")} className="flex items-center justify-between rounded-3xl bg-primary px-6 py-5 text-primary-foreground shadow-[var(--shadow-primary)] transition active:scale-[0.98]">
               <div className="text-left">
                 <div className="text-xs font-semibold uppercase tracking-wider opacity-80">Mode A</div>
                 <div className="text-lg font-bold">Create a Pair</div>
               </div>
               <UserPlus className="h-5 w-5" />
             </button>
-            <button onClick={() => setMode("join")} className="group flex items-center justify-between rounded-3xl border-2 border-secondary/20 bg-secondary-soft px-6 py-5 text-secondary transition active:scale-[0.98]">
+            <button onClick={() => setMode("join")} className="flex items-center justify-between rounded-3xl border-2 border-secondary/20 bg-secondary-soft px-6 py-5 text-secondary transition active:scale-[0.98]">
               <div className="text-left">
                 <div className="text-xs font-semibold uppercase tracking-wider opacity-80">Mode B</div>
                 <div className="text-lg font-bold">Enter Invite Code</div>
@@ -385,9 +725,7 @@ function Onboarding({
                 <div className="rounded-3xl bg-surface p-6 text-center shadow-[var(--shadow-card)]">
                   <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Your invite code</div>
                   <div className="mt-3 flex items-center justify-center gap-1 font-mono text-[38px] font-bold tracking-[0.2em] text-primary">
-                    {createdCode.split("").map((c, i) => (
-                      <span key={i} className="rounded-xl bg-primary-soft px-2.5 py-1">{c}</span>
-                    ))}
+                    {createdCode.split("").map((c, i) => (<span key={i} className="rounded-xl bg-primary-soft px-2.5 py-1">{c}</span>))}
                   </div>
                   <div className="mt-4 flex justify-center gap-2">
                     <button onClick={copy} className="inline-flex items-center gap-2 rounded-full bg-muted px-4 py-2 text-sm font-semibold"><Copy className="h-4 w-4" /> Copy</button>
@@ -403,477 +741,16 @@ function Onboarding({
 
         {mode === "join" && (
           <div className="flex flex-col gap-4">
-            <div className="rounded-3xl bg-surface p-6 shadow-[var(--shadow-card)]">
-              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Enter 6-character invite code</label>
-              <input
-                value={joinCode}
-                onChange={(e) => setJoinCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6))}
-                placeholder="ABC123"
-                className="mt-3 w-full rounded-2xl bg-muted px-4 py-4 text-center font-mono text-2xl font-bold tracking-[0.35em] outline-none ring-primary/40 focus:ring-4"
-              />
-            </div>
-            <button disabled={joinCode.length !== 6 || busy} onClick={joinPair} className="rounded-full bg-primary px-6 py-4 text-sm font-bold text-primary-foreground shadow-[var(--shadow-primary)] disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none">
-              {busy ? "…" : "Join pair"}
+            <input value={joinCode} onChange={(e) => setJoinCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6))}
+              placeholder="ABC123" className="w-full rounded-3xl bg-surface px-6 py-5 text-center font-mono text-2xl font-bold tracking-[0.3em] shadow-[var(--shadow-card)] outline-none ring-primary/40 focus:ring-4" />
+            <button disabled={joinCode.length !== 6 || busy} onClick={joinPair}
+              className="rounded-full bg-primary px-6 py-4 text-sm font-bold text-primary-foreground shadow-[var(--shadow-primary)] disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none">
+              Join pair
             </button>
             <button onClick={() => setMode("choose")} className="text-sm text-muted-foreground underline">Back</button>
           </div>
         )}
       </div>
     </div>
-  );
-}
-
-/* ---------------------- header ---------------------- */
-
-function Header({
-  profile, partner, pairs, profiles, activePair, onSwitch, onCopy, onSettings, userId,
-}: {
-  profile: Profile;
-  partner: Profile | null;
-  pairs: Pair[];
-  profiles: Record<string, Profile>;
-  activePair: Pair;
-  onSwitch: (id: string) => void;
-  onCopy: () => void;
-  onSettings: () => void;
-  userId: string;
-}) {
-  const partnerName = (pair: Pair): string => {
-    const otherId = pair.user1_id === userId ? pair.user2_id : pair.user1_id;
-    if (!otherId) return "Pending";
-    return profiles[otherId]?.display_name ?? "Partner";
-  };
-
-  return (
-    <div className="flex items-center justify-between gap-2 px-6 pt-8">
-      <img src={logo.url} alt="PairUp" className="h-8 w-auto" />
-      <div className="flex items-center gap-2">
-        {pairs.length > 1 ? (
-          <DropdownMenu>
-            <DropdownMenuTrigger className="inline-flex items-center gap-1 rounded-full bg-secondary-soft px-3 py-1.5 text-xs font-bold text-secondary">
-              <Users className="h-3.5 w-3.5" /> {partner?.display_name ?? "Pending"} <ChevronDown className="h-3 w-3" />
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuLabel>Switch partner</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              {pairs.map((p) => (
-                <DropdownMenuItem key={p.id} onClick={() => onSwitch(p.id)} className={p.id === activePair.id ? "font-bold" : ""}>
-                  <Users className="mr-2 h-4 w-4" /> {partnerName(p)}
-                </DropdownMenuItem>
-              ))}
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={onSettings}><UserPlus className="mr-2 h-4 w-4" /> Add new partner</DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        ) : (
-          <button onClick={onCopy} className="rounded-full bg-muted px-3 py-1.5 font-mono text-xs font-bold tracking-widest text-muted-foreground transition active:scale-95">
-            {activePair.invite_code}
-          </button>
-        )}
-        <button onClick={onSettings} aria-label="Settings" className="grid h-9 w-9 place-items-center rounded-full bg-primary text-lg text-primary-foreground shadow-[var(--shadow-primary)]">
-          {profile.avatar_emoji}
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function PendingPartner({ code, onCopy }: { code: string; onCopy: () => void }) {
-  return (
-    <div className="mx-6 mt-4 rounded-2xl border-2 border-dashed border-primary/30 bg-primary-soft p-4 text-center">
-      <div className="text-xs font-bold uppercase tracking-wider text-primary">Waiting for your partner</div>
-      <div className="mt-1 text-sm text-foreground">Share your invite code to start the streak</div>
-      <button onClick={onCopy} className="mt-3 inline-flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-xs font-bold text-primary-foreground">
-        <Copy className="h-3.5 w-3.5" /> {code}
-      </button>
-    </div>
-  );
-}
-
-/* ---------------------- streak banner ---------------------- */
-
-function StreakBanner({ streak, longest, active }: { streak: number; longest: number; active: boolean }) {
-  return (
-    <div className="mx-6 mt-6 overflow-hidden rounded-[32px] bg-gradient-to-br from-primary to-[#ff8a5b] p-6 text-primary-foreground shadow-[var(--shadow-primary)]">
-      <div className="flex items-start justify-between">
-        <div>
-          <div className="text-xs font-semibold uppercase tracking-[0.2em] opacity-80">Shared streak</div>
-          <div className="mt-2 flex items-end gap-2">
-            <motion.div key={streak} initial={{ scale: 0.7, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="text-[64px] font-bold leading-none tracking-tight">
-              {streak}
-            </motion.div>
-            <div className="pb-2 text-lg font-semibold opacity-90">days</div>
-          </div>
-          <div className="mt-1 text-sm font-medium opacity-90">Longest: <b>{longest} days</b></div>
-        </div>
-        <div className={active ? "animate-flame" : ""}>
-          <div className="grid h-16 w-16 place-items-center rounded-2xl bg-white/20 backdrop-blur">
-            <Flame className="h-9 w-9" fill="currentColor" />
-          </div>
-        </div>
-      </div>
-      <div className="mt-4 rounded-full bg-white/15 px-4 py-2 text-center text-xs font-semibold">
-        {active ? "🔥 You both crushed today — streak locked in!" : "Both partners must complete every habit today."}
-      </div>
-    </div>
-  );
-}
-
-/* ---------------------- partner status ---------------------- */
-
-function PartnerStatus({
-  profile, partner, habits, myLogs, partnerLogs,
-}: {
-  profile: Profile;
-  partner: Profile | null;
-  habits: Habit[];
-  myLogs: Set<string>;
-  partnerLogs: Set<string>;
-}) {
-  return (
-    <div className="mx-6 mt-4 grid grid-cols-2 gap-3">
-      <StatusChip color="primary" emoji={profile.avatar_emoji} name={profile.display_name} count={habits.filter((h) => myLogs.has(h.id)).length} total={habits.length} />
-      <StatusChip color="secondary" emoji={partner?.avatar_emoji ?? "…"} name={partner?.display_name ?? "Waiting"} count={habits.filter((h) => partnerLogs.has(h.id)).length} total={habits.length} />
-    </div>
-  );
-}
-function StatusChip({ color, emoji, name, count, total }: { color: "primary" | "secondary"; emoji: string; name: string; count: number; total: number }) {
-  const done = count === total && total > 0;
-  const colorBg = color === "primary" ? "bg-primary" : "bg-secondary";
-  const colorText = color === "primary" ? "text-primary-foreground" : "text-secondary-foreground";
-  return (
-    <div className="rounded-2xl bg-surface p-3 shadow-[var(--shadow-card)]">
-      <div className="flex items-center gap-3">
-        <div className={`grid h-10 w-10 place-items-center rounded-xl ${colorBg} ${colorText} text-lg font-bold`}>{emoji}</div>
-        <div className="min-w-0 flex-1">
-          <div className="truncate text-sm font-semibold">{name}</div>
-          <div className={`text-xs font-semibold ${done ? "text-success" : "text-muted-foreground"}`}>{done ? "Done today ✓" : `${count}/${total} done`}</div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ---------------------- habit list ---------------------- */
-
-function HabitList({
-  habits, myLogs, partnerLogs, partnerName, onToggle, onRequestDelete, onAdd, loading,
-}: {
-  habits: Habit[];
-  myLogs: Set<string>;
-  partnerLogs: Set<string>;
-  partnerName: string;
-  onToggle: (h: Habit) => void;
-  onRequestDelete: (h: Habit) => void;
-  onAdd: (title: string, icon: IconKey) => void;
-  loading: boolean;
-}) {
-  const [adding, setAdding] = useState(false);
-  const canAdd = habits.length < 3;
-
-  return (
-    <div className="mt-6 px-6">
-      <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Today's habits</h2>
-        <span className="text-xs font-semibold text-muted-foreground">{habits.length}/3</span>
-      </div>
-      <div className="flex flex-col gap-3">
-        {loading && habits.length === 0 && <div className="rounded-2xl bg-surface p-6 text-center text-sm text-muted-foreground">Loading…</div>}
-        <AnimatePresence initial={false}>
-          {habits.map((h) => (
-            <motion.div key={h.id} layout initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, x: 40 }}>
-              <HabitCard habit={h} mine={myLogs.has(h.id)} theirs={partnerLogs.has(h.id)} partnerName={partnerName} onToggle={() => onToggle(h)} onRemove={() => onRequestDelete(h)} />
-            </motion.div>
-          ))}
-        </AnimatePresence>
-        {canAdd && !adding && (
-          <button onClick={() => setAdding(true)} className="flex items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-border bg-transparent py-4 text-sm font-semibold text-muted-foreground transition hover:border-primary hover:text-primary">
-            <Plus className="h-4 w-4" /> Add a habit
-          </button>
-        )}
-        {adding && <AddHabit onCancel={() => setAdding(false)} onCreate={(t, i) => { onAdd(t, i); setAdding(false); }} />}
-      </div>
-    </div>
-  );
-}
-
-function HabitCard({ habit, mine, theirs, partnerName, onToggle, onRemove }: {
-  habit: Habit; mine: boolean; theirs: boolean; partnerName: string; onToggle: () => void; onRemove: () => void;
-}) {
-  const Icon = ICONS[habit.icon as IconKey] ?? Check;
-  const [burst, setBurst] = useState(false);
-  const handleToggle = () => {
-    if (!mine) { setBurst(true); setTimeout(() => setBurst(false), 700); }
-    onToggle();
-  };
-  const both = mine && theirs;
-  return (
-    <div className={`relative overflow-hidden rounded-2xl bg-surface p-4 shadow-[var(--shadow-card)] transition ${both ? "ring-2 ring-success/40" : ""}`}>
-      <div className="flex items-center gap-3">
-        <div className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl ${both ? "bg-success-soft text-success" : "bg-primary-soft text-primary"}`}>
-          <Icon className="h-5 w-5" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className={`truncate text-[15px] font-bold ${mine ? "text-muted-foreground line-through" : "text-foreground"}`}>{habit.title}</div>
-          <div className="mt-0.5 text-xs font-semibold">
-            {theirs ? <span className="text-success">{partnerName} finished ✓</span> : <span className="text-secondary">Waiting on {partnerName}…</span>}
-          </div>
-        </div>
-        <button onClick={onRemove} aria-label="Remove habit" className="grid h-8 w-8 place-items-center rounded-full text-muted-foreground transition hover:bg-muted hover:text-destructive">
-          <Trash2 className="h-4 w-4" />
-        </button>
-        <button onClick={handleToggle} aria-pressed={mine} className={`relative grid h-12 w-12 place-items-center rounded-full transition active:scale-90 ${mine ? "bg-success text-success-foreground shadow-[var(--shadow-success)]" : "bg-muted text-muted-foreground"}`}>
-          <motion.span key={mine ? "done" : "todo"} initial={{ scale: 0.6, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}>
-            <Check className="h-6 w-6" strokeWidth={3} />
-          </motion.span>
-          {burst && Array.from({ length: 6 }).map((_, i) => (
-            <span key={i} className="animate-burst pointer-events-none absolute h-2 w-2 rounded-full bg-primary" style={{ transform: `rotate(${i * 60}deg) translateY(-24px)` }} />
-          ))}
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function AddHabit({ onCancel, onCreate }: { onCancel: () => void; onCreate: (title: string, icon: IconKey) => void }) {
-  const [title, setTitle] = useState("");
-  const [icon, setIcon] = useState<IconKey>("check");
-  return (
-    <div className="rounded-2xl bg-surface p-4 shadow-[var(--shadow-card)]">
-      <input autoFocus value={title} onChange={(e) => setTitle(e.target.value.slice(0, 40))} placeholder="e.g. Meditate 10 min"
-        className="w-full rounded-xl bg-muted px-4 py-3 text-[15px] font-semibold outline-none ring-primary/40 focus:ring-4" />
-      <div className="mt-3 flex flex-wrap gap-2">
-        {ICON_ORDER.map((k) => {
-          const I = ICONS[k]; const active = k === icon;
-          return (
-            <button key={k} onClick={() => setIcon(k)} className={`grid h-10 w-10 place-items-center rounded-xl transition ${active ? "bg-primary text-primary-foreground shadow-[var(--shadow-primary)]" : "bg-muted text-muted-foreground"}`}>
-              <I className="h-5 w-5" />
-            </button>
-          );
-        })}
-      </div>
-      <div className="mt-4 flex justify-end gap-2">
-        <button onClick={onCancel} className="rounded-full px-4 py-2 text-sm font-semibold text-muted-foreground">Cancel</button>
-        <button disabled={!title.trim()} onClick={() => onCreate(title.trim(), icon)}
-          className="rounded-full bg-primary px-5 py-2 text-sm font-bold text-primary-foreground shadow-[var(--shadow-primary)] disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none">
-          Add
-        </button>
-      </div>
-    </div>
-  );
-}
-
-/* ---------------------- nudge bar ---------------------- */
-
-function NudgeBar({ partnerName, partnerPending, sent, onSend }: { partnerName: string; partnerPending: boolean; sent: boolean; onSend: () => void }) {
-  return (
-    <div className="fixed inset-x-0 bottom-0 z-10">
-      <div className="mx-auto max-w-[440px] px-4 pb-[max(16px,env(safe-area-inset-bottom))]">
-        <button onClick={onSend} disabled={!partnerPending || sent}
-          className={`flex w-full items-center justify-center gap-2 rounded-full px-6 py-4 text-sm font-bold shadow-[var(--shadow-primary)] transition active:scale-[0.98] ${
-            !partnerPending ? "bg-success text-success-foreground" : sent ? "bg-secondary text-secondary-foreground" : "bg-primary text-primary-foreground"
-          }`}>
-          <Bell className="h-4 w-4" />
-          {!partnerPending ? `${partnerName} is all caught up 🎉` : sent ? `Nudge sent to ${partnerName}!` : `Send ${partnerName} a nudge`}
-        </button>
-      </div>
-    </div>
-  );
-}
-
-/* ---------------------- settings drawer ---------------------- */
-
-function SettingsDrawer({
-  open, onOpenChange, profile, pairs, profiles, activePairId, userId,
-  onProfileChanged, onSwitch, onSignOut, onPairsChanged, onAddPartner,
-}: {
-  open: boolean;
-  onOpenChange: (o: boolean) => void;
-  profile: Profile;
-  pairs: Pair[];
-  profiles: Record<string, Profile>;
-  activePairId: string | null;
-  userId: string;
-  onProfileChanged: (p: Profile) => void;
-  onSwitch: (id: string) => void;
-  onSignOut: () => void;
-  onPairsChanged: () => Promise<void>;
-  onAddPartner: () => Promise<void>;
-}) {
-  const [name, setName] = useState(profile.display_name);
-  const [emoji, setEmoji] = useState(profile.avatar_emoji);
-  const [tz, setTz] = useState(profile.timezone);
-  const [reminder, setReminder] = useState(profile.reminder_time ?? "");
-  const [confirmUnpair, setConfirmUnpair] = useState<Pair | null>(null);
-  const [addPartnerMode, setAddPartnerMode] = useState<null | "create" | "join">(null);
-  const [joinCode, setJoinCode] = useState("");
-  const [newCode, setNewCode] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (open) {
-      setName(profile.display_name); setEmoji(profile.avatar_emoji);
-      setTz(profile.timezone); setReminder(profile.reminder_time ?? "");
-      setAddPartnerMode(null); setNewCode(null); setJoinCode("");
-    }
-  }, [open, profile]);
-
-  const saveProfile = async () => {
-    const { data, error } = await supabase.from("profiles").update({
-      display_name: name, avatar_emoji: emoji, timezone: tz, reminder_time: reminder || null,
-    }).eq("id", userId).select().single();
-    if (error) { toast.error(error.message); return; }
-    onProfileChanged(data as Profile);
-    toast.success("Profile updated");
-  };
-
-  const unpair = async () => {
-    if (!confirmUnpair) return;
-    const { error } = await supabase.rpc("archive_pair", { _pair_id: confirmUnpair.id });
-    if (error) { toast.error(error.message); return; }
-    toast.success("Pair archived");
-    setConfirmUnpair(null);
-    await onPairsChanged();
-  };
-
-  const createNewPair = async () => {
-    const { data, error } = await supabase.rpc("create_pair");
-    if (error) { toast.error(error.message); return; }
-    const { data: p } = await supabase.from("pairs").select("invite_code").eq("id", data as string).single();
-    setNewCode(p?.invite_code ?? null);
-    await onAddPartner();
-  };
-  const joinNewPair = async () => {
-    const { error } = await supabase.rpc("join_pair", { _code: joinCode.toUpperCase() });
-    if (error) { toast.error(error.message); return; }
-    toast.success("Joined!");
-    setAddPartnerMode(null); setJoinCode("");
-    await onAddPartner();
-  };
-
-  const partnerNameFor = (pair: Pair) => {
-    const otherId = pair.user1_id === userId ? pair.user2_id : pair.user1_id;
-    if (!otherId) return "Pending partner";
-    return profiles[otherId]?.display_name ?? "Partner";
-  };
-
-  return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-full max-w-[440px] overflow-y-auto sm:max-w-[440px]">
-        <SheetHeader>
-          <SheetTitle className="flex items-center gap-2"><SettingsIcon className="h-5 w-5" /> Settings</SheetTitle>
-          <SheetDescription>Manage your account and partners</SheetDescription>
-        </SheetHeader>
-
-        {/* Profile */}
-        <div className="mt-6 space-y-4">
-          <div>
-            <div className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Your profile</div>
-            <div className="mt-3 space-y-3 rounded-2xl bg-surface p-4 shadow-[var(--shadow-card)]">
-              <label className="block">
-                <span className="text-xs font-semibold text-muted-foreground">Display name</span>
-                <input value={name} onChange={(e) => setName(e.target.value)} className="mt-1 w-full rounded-xl bg-muted px-4 py-3 text-sm font-semibold outline-none ring-primary/40 focus:ring-4" />
-              </label>
-              <div>
-                <span className="text-xs font-semibold text-muted-foreground">Avatar</span>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {EMOJIS.map((e) => (
-                    <button key={e} onClick={() => setEmoji(e)} className={`grid h-10 w-10 place-items-center rounded-xl text-lg transition ${emoji === e ? "bg-primary text-primary-foreground shadow-[var(--shadow-primary)]" : "bg-muted"}`}>{e}</button>
-                  ))}
-                </div>
-              </div>
-              <label className="block">
-                <span className="text-xs font-semibold text-muted-foreground">Timezone</span>
-                <select value={tz} onChange={(e) => setTz(e.target.value)} className="mt-1 w-full rounded-xl bg-muted px-4 py-3 text-sm font-semibold outline-none">
-                  {TIMEZONES.map((z) => <option key={z} value={z}>{z}</option>)}
-                </select>
-              </label>
-              <label className="block">
-                <span className="text-xs font-semibold text-muted-foreground">Daily reminder time (optional)</span>
-                <input type="time" value={reminder} onChange={(e) => setReminder(e.target.value)} className="mt-1 w-full rounded-xl bg-muted px-4 py-3 text-sm font-semibold outline-none" />
-              </label>
-              <button onClick={saveProfile} className="w-full rounded-full bg-primary py-3 text-sm font-bold text-primary-foreground shadow-[var(--shadow-primary)]">Save profile</button>
-            </div>
-          </div>
-
-          {/* Partners */}
-          <div>
-            <div className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Your partners</div>
-            <div className="mt-3 space-y-2">
-              {pairs.map((p) => {
-                const isActive = p.id === activePairId;
-                return (
-                  <div key={p.id} className={`flex items-center gap-3 rounded-2xl p-3 shadow-[var(--shadow-card)] ${isActive ? "bg-primary-soft" : "bg-surface"}`}>
-                    <div className="grid h-10 w-10 place-items-center rounded-xl bg-secondary text-lg text-secondary-foreground">
-                      {(() => { const o = p.user1_id === userId ? p.user2_id : p.user1_id; return o ? (profiles[o]?.avatar_emoji ?? "🙂") : "⏳"; })()}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate text-sm font-bold">{partnerNameFor(p)}</div>
-                      <div className="text-xs text-muted-foreground">🔥 {p.current_streak} day streak · Code {p.invite_code}</div>
-                    </div>
-                    {!isActive && (
-                      <button onClick={() => { onSwitch(p.id); onOpenChange(false); }} className="rounded-full bg-secondary px-3 py-1.5 text-xs font-bold text-secondary-foreground">Switch</button>
-                    )}
-                    <button onClick={() => setConfirmUnpair(p)} aria-label="Unpair" className="grid h-8 w-8 place-items-center rounded-full text-muted-foreground hover:bg-muted hover:text-destructive">
-                      <X className="h-4 w-4" />
-                    </button>
-                  </div>
-                );
-              })}
-
-              {addPartnerMode === null && (
-                <button onClick={() => setAddPartnerMode("create")} className="flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-border py-3 text-sm font-semibold text-muted-foreground hover:border-primary hover:text-primary">
-                  <UserPlus className="h-4 w-4" /> Add / link new partner
-                </button>
-              )}
-              {addPartnerMode !== null && (
-                <div className="rounded-2xl bg-surface p-4 shadow-[var(--shadow-card)]">
-                  <div className="mb-3 flex gap-2">
-                    <button onClick={() => { setAddPartnerMode("create"); setNewCode(null); }} className={`flex-1 rounded-full px-3 py-2 text-xs font-bold ${addPartnerMode === "create" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>Create code</button>
-                    <button onClick={() => setAddPartnerMode("join")} className={`flex-1 rounded-full px-3 py-2 text-xs font-bold ${addPartnerMode === "join" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>Enter code</button>
-                  </div>
-                  {addPartnerMode === "create" ? (
-                    !newCode ? (
-                      <button onClick={createNewPair} className="w-full rounded-full bg-primary py-3 text-sm font-bold text-primary-foreground shadow-[var(--shadow-primary)]">Generate code</button>
-                    ) : (
-                      <div className="text-center">
-                        <div className="font-mono text-2xl font-bold tracking-[0.2em] text-primary">{newCode}</div>
-                        <button onClick={() => { navigator.clipboard.writeText(newCode); toast.success("Invite code copied!"); }} className="mt-2 inline-flex items-center gap-2 rounded-full bg-muted px-4 py-2 text-xs font-semibold"><Copy className="h-3 w-3" /> Copy</button>
-                      </div>
-                    )
-                  ) : (
-                    <div className="flex flex-col gap-2">
-                      <input value={joinCode} onChange={(e) => setJoinCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6))} placeholder="ABC123"
-                        className="w-full rounded-xl bg-muted px-4 py-3 text-center font-mono text-lg font-bold tracking-[0.35em] outline-none ring-primary/40 focus:ring-4" />
-                      <button disabled={joinCode.length !== 6} onClick={joinNewPair} className="rounded-full bg-primary py-3 text-sm font-bold text-primary-foreground shadow-[var(--shadow-primary)] disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none">Join</button>
-                    </div>
-                  )}
-                  <button onClick={() => setAddPartnerMode(null)} className="mt-3 w-full text-center text-xs text-muted-foreground underline">Cancel</button>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Sign out */}
-          <button onClick={onSignOut} className="mt-4 flex w-full items-center justify-center gap-2 rounded-full bg-destructive px-6 py-4 text-sm font-bold text-destructive-foreground">
-            <LogOut className="h-4 w-4" /> Sign out
-          </button>
-        </div>
-
-        <AlertDialog open={!!confirmUnpair} onOpenChange={(o) => !o && setConfirmUnpair(null)}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Archive this pair?</AlertDialogTitle>
-              <AlertDialogDescription>
-                This will archive your shared streak with {confirmUnpair ? partnerNameFor(confirmUnpair) : ""}. You can still create a new pair later.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Keep pair</AlertDialogCancel>
-              <AlertDialogAction onClick={unpair} className="bg-destructive text-destructive-foreground">Archive pair</AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-      </SheetContent>
-    </Sheet>
   );
 }
