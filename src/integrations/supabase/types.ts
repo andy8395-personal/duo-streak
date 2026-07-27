@@ -53,6 +53,7 @@ export type Database = {
           id: string
           pair_id: string
           position: number
+          time_of_day: string
           title: string
         }
         Insert: {
@@ -61,6 +62,7 @@ export type Database = {
           id?: string
           pair_id: string
           position?: number
+          time_of_day?: string
           title: string
         }
         Update: {
@@ -69,6 +71,7 @@ export type Database = {
           id?: string
           pair_id?: string
           position?: number
+          time_of_day?: string
           title?: string
         }
         Relationships: [
@@ -81,15 +84,66 @@ export type Database = {
           },
         ]
       }
+      nudges: {
+        Row: {
+          created_at: string
+          habit_id: string | null
+          id: string
+          kind: string
+          message: string
+          pair_id: string
+          recipient_id: string
+          sender_id: string
+        }
+        Insert: {
+          created_at?: string
+          habit_id?: string | null
+          id?: string
+          kind?: string
+          message?: string
+          pair_id: string
+          recipient_id: string
+          sender_id: string
+        }
+        Update: {
+          created_at?: string
+          habit_id?: string | null
+          id?: string
+          kind?: string
+          message?: string
+          pair_id?: string
+          recipient_id?: string
+          sender_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nudges_habit_id_fkey"
+            columns: ["habit_id"]
+            isOneToOne: false
+            referencedRelation: "habits"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nudges_pair_id_fkey"
+            columns: ["pair_id"]
+            isOneToOne: false
+            referencedRelation: "pairs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pairs: {
         Row: {
           archived: boolean
           created_at: string
           current_streak: number
+          freeze_used_month: string | null
+          habit_slots: number
           id: string
           invite_code: string
           last_completed_date: string | null
           longest_streak: number
+          plan: string
           user1_id: string
           user2_id: string | null
         }
@@ -97,10 +151,13 @@ export type Database = {
           archived?: boolean
           created_at?: string
           current_streak?: number
+          freeze_used_month?: string | null
+          habit_slots?: number
           id?: string
           invite_code: string
           last_completed_date?: string | null
           longest_streak?: number
+          plan?: string
           user1_id: string
           user2_id?: string | null
         }
@@ -108,10 +165,13 @@ export type Database = {
           archived?: boolean
           created_at?: string
           current_streak?: number
+          freeze_used_month?: string | null
+          habit_slots?: number
           id?: string
           invite_code?: string
           last_completed_date?: string | null
           longest_streak?: number
+          plan?: string
           user1_id?: string
           user2_id?: string | null
         }
@@ -124,6 +184,8 @@ export type Database = {
           created_at: string
           display_name: string
           id: string
+          partner_slots: number
+          plan: string
           reminder_time: string | null
           timezone: string
           updated_at: string
@@ -134,6 +196,8 @@ export type Database = {
           created_at?: string
           display_name?: string
           id: string
+          partner_slots?: number
+          plan?: string
           reminder_time?: string | null
           timezone?: string
           updated_at?: string
@@ -144,6 +208,8 @@ export type Database = {
           created_at?: string
           display_name?: string
           id?: string
+          partner_slots?: number
+          plan?: string
           reminder_time?: string | null
           timezone?: string
           updated_at?: string
@@ -154,6 +220,41 @@ export type Database = {
             columns: ["active_pair_id"]
             isOneToOne: false
             referencedRelation: "pairs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      reactions: {
+        Row: {
+          comment: string | null
+          created_at: string
+          emoji: string
+          habit_log_id: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          comment?: string | null
+          created_at?: string
+          emoji?: string
+          habit_log_id: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          comment?: string | null
+          created_at?: string
+          emoji?: string
+          habit_log_id?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reactions_habit_log_id_fkey"
+            columns: ["habit_log_id"]
+            isOneToOne: false
+            referencedRelation: "habit_logs"
             referencedColumns: ["id"]
           },
         ]
@@ -176,6 +277,9 @@ export type Database = {
         Returns: boolean
       }
       switch_active_pair: { Args: { _pair_id: string }; Returns: undefined }
+      unlock_habit_slot: { Args: { _pair_id: string }; Returns: undefined }
+      unlock_partner_slot: { Args: never; Returns: undefined }
+      use_streak_freeze: { Args: { _pair_id: string }; Returns: undefined }
     }
     Enums: {
       [_ in never]: never
