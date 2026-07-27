@@ -1,0 +1,20 @@
+REVOKE EXECUTE ON FUNCTION public.create_pair() FROM anon, public;
+REVOKE EXECUTE ON FUNCTION public.join_pair(text) FROM anon, public;
+REVOKE EXECUTE ON FUNCTION public.switch_active_pair(uuid) FROM anon, public;
+REVOKE EXECUTE ON FUNCTION public.archive_pair(uuid) FROM anon, public;
+REVOKE EXECUTE ON FUNCTION public.unlock_habit_slot(uuid) FROM anon, public;
+REVOKE EXECUTE ON FUNCTION public.unlock_partner_slot() FROM anon, public;
+REVOKE EXECUTE ON FUNCTION public.use_streak_freeze(uuid) FROM anon, public;
+REVOKE EXECUTE ON FUNCTION public.is_pair_member(uuid, uuid) FROM anon, public;
+REVOKE EXECUTE ON FUNCTION public.shares_pair_with(uuid, uuid) FROM anon, public;
+REVOKE EXECUTE ON FUNCTION public.generate_invite_code() FROM anon, public;
+
+GRANT EXECUTE ON FUNCTION public.create_pair() TO authenticated;
+GRANT EXECUTE ON FUNCTION public.join_pair(text) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.switch_active_pair(uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.archive_pair(uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.unlock_habit_slot(uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.unlock_partner_slot() TO authenticated;
+GRANT EXECUTE ON FUNCTION public.use_streak_freeze(uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.is_pair_member(uuid, uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.shares_pair_with(uuid, uuid) TO authenticated;
