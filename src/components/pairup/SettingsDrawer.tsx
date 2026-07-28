@@ -159,6 +159,29 @@ export function SettingsDrawer({
         {/* Profile */}
         <div className="mt-6 space-y-4">
           <div className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Your profile</div>
+
+          <div className="flex items-center gap-4">
+            <div className="relative">
+              <div className="grid h-20 w-20 place-items-center overflow-hidden rounded-full bg-muted text-3xl">
+                <Avatar emoji={emoji} avatarPath={profile.avatar_url} alt={profile.display_name} />
+              </div>
+              <button onClick={() => fileRef.current?.click()} disabled={uploading} aria-label="Upload photo"
+                className="absolute -bottom-1 -right-1 grid h-8 w-8 place-items-center rounded-full bg-primary text-primary-foreground shadow-[var(--shadow-primary)] disabled:opacity-60">
+                <Camera className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="flex-1 text-xs text-muted-foreground">
+              {uploading ? "Uploading…" : profile.avatar_url ? "Photo avatar active." : "Upload a photo, or pick an emoji below."}
+              {profile.avatar_url && (
+                <button onClick={removeAvatar} className="mt-2 flex items-center gap-1 text-xs font-bold text-destructive">
+                  <X className="h-3.5 w-3.5" /> Remove photo
+                </button>
+              )}
+            </div>
+            <input ref={fileRef} type="file" accept="image/*" className="hidden"
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadAvatar(f); e.target.value = ""; }} />
+          </div>
+
           <input value={name} onChange={(e) => setName(e.target.value.slice(0, 30))} placeholder="Display name"
             className="w-full rounded-2xl bg-muted px-4 py-3 text-sm font-semibold outline-none ring-primary/40 focus:ring-4" />
           <div className="flex flex-wrap gap-2">
@@ -169,6 +192,7 @@ export function SettingsDrawer({
               </button>
             ))}
           </div>
+
           <div className="grid grid-cols-2 gap-2">
             <select value={tz} onChange={(e) => setTz(e.target.value)} className="rounded-2xl bg-muted px-3 py-3 text-sm font-semibold outline-none">
               {TIMEZONES.map((t) => <option key={t} value={t}>{t}</option>)}
