@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   Settings as SettingsIcon, LogOut, UserPlus, Users, Copy, Trash2, Crown, PlayCircle, Check,
+  Camera, Bell, X, Download,
 } from "lucide-react";
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription,
@@ -12,6 +13,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { EMOJIS, Pair, Profile, TIMEZONES } from "./types";
+import { Avatar } from "./Avatar";
+import { notificationPermission, requestNotificationPermission } from "@/lib/notifications";
 
 export function SettingsDrawer({
   open, onOpenChange, profile, pairs, profiles, activePairId, userId,
@@ -39,17 +42,72 @@ export function SettingsDrawer({
   const [addMode, setAddMode] = useState<null | "create" | "join">(null);
   const [joinCode, setJoinCode] = useState("");
   const [newCode, setNewCode] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [perm, setPerm] = useState<string>("default");
+  const [installEvt, setInstallEvt] = useState<any>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (open) {
       setName(profile.display_name); setEmoji(profile.avatar_emoji);
       setTz(profile.timezone); setReminder(profile.reminder_time ?? "");
       setAddMode(null); setNewCode(null); setJoinCode("");
+      setPerm(notificationPermission());
     }
   }, [open, profile]);
 
+  useEffect(() => {
+    const handler = (e: Event) => { e.preventDefault(); setInstallEvt(e); };
+    window.addEventListener("beforeinstallprompt", handler);
+    return () => window.removeEventListener("beforeinstallprompt", handler);
+  }, []);
+
   const slots = profile.partner_slots ?? 1;
   const canAddPartner = pairs.length < slots;
+
+  const patchProfile = async (patch: { avatar_url?: string | null; push_enabled?: boolean }) => {
+    const { data, error } = await supabase.from("profiles").update(patch).eq("id", userId).select().single();
+    if (error) { toast.error(error.message); return null; }
+    onProfileChanged(data as Profile);
+    return data as Profile;
+  };
+
+  const uploadAvatar = async (file: File) => {
+    if (!file.type.startsWith("image/")) { toast.error("Pick an image file"); return; }
+    if (file.size > 5 * 1024 * 1024) { toast.error("Keep it under 5 MB"); return; }
+    setUploading(true);
+    const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
+    const path = `${userId}/avatar-${Date.now()}.${ext}`;
+    const { error } = await supabase.storage.from("avatars").upload(path, file, { upsert: true });
+    if (error) { setUploading(false); toast.error(error.message); return; }
+    if (profile.avatar_url) await supabase.storage.from("avatars").remove([profile.avatar_url]);
+    await patchProfile({ avatar_url: path });
+    setUploading(false);
+    toast.success("Photo updated");
+  };
+
+  const removeAvatar = async () => {
+    if (profile.avatar_url) await supabase.storage.from("avatars").remove([profile.avatar_url]);
+    await patchProfile({ avatar_url: null });
+    toast.success("Back to your emoji");
+  };
+
+  const toggleNotifications = async () => {
+    if (profile.push_enabled) { await patchProfile({ push_enabled: false }); toast("Reminders off"); return; }
+    const result = await requestNotificationPermission();
+    setPerm(result);
+    if (result === "unsupported") { toast.error("This device doesn't support notifications"); return; }
+    if (result !== "granted") { toast.error("Notifications blocked — enable them in your browser settings"); return; }
+    await patchProfile({ push_enabled: true });
+    toast.success("Nudges will now buzz your device 🔔");
+  };
+
+  const installApp = async () => {
+    if (!installEvt) { toast("On iPhone: tap Share → Add to Home Screen"); return; }
+    installEvt.prompt();
+    setInstallEvt(null);
+  };
+
 
   const saveProfile = async () => {
     const { data, error } = await supabase.from("profiles").update({
@@ -101,6 +159,29 @@ export function SettingsDrawer({
         {/* Profile */}
         <div className="mt-6 space-y-4">
           <div className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Your profile</div>
+
+          <div className="flex items-center gap-4">
+            <div className="relative">
+              <div className="grid h-20 w-20 place-items-center overflow-hidden rounded-full bg-muted text-3xl">
+                <Avatar emoji={emoji} avatarPath={profile.avatar_url} alt={profile.display_name} />
+              </div>
+              <button onClick={() => fileRef.current?.click()} disabled={uploading} aria-label="Upload photo"
+                className="absolute -bottom-1 -right-1 grid h-8 w-8 place-items-center rounded-full bg-primary text-primary-foreground shadow-[var(--shadow-primary)] disabled:opacity-60">
+                <Camera className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="flex-1 text-xs text-muted-foreground">
+              {uploading ? "Uploading…" : profile.avatar_url ? "Photo avatar active." : "Upload a photo, or pick an emoji below."}
+              {profile.avatar_url && (
+                <button onClick={removeAvatar} className="mt-2 flex items-center gap-1 text-xs font-bold text-destructive">
+                  <X className="h-3.5 w-3.5" /> Remove photo
+                </button>
+              )}
+            </div>
+            <input ref={fileRef} type="file" accept="image/*" className="hidden"
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadAvatar(f); e.target.value = ""; }} />
+          </div>
+
           <input value={name} onChange={(e) => setName(e.target.value.slice(0, 30))} placeholder="Display name"
             className="w-full rounded-2xl bg-muted px-4 py-3 text-sm font-semibold outline-none ring-primary/40 focus:ring-4" />
           <div className="flex flex-wrap gap-2">
@@ -111,6 +192,7 @@ export function SettingsDrawer({
               </button>
             ))}
           </div>
+
           <div className="grid grid-cols-2 gap-2">
             <select value={tz} onChange={(e) => setTz(e.target.value)} className="rounded-2xl bg-muted px-3 py-3 text-sm font-semibold outline-none">
               {TIMEZONES.map((t) => <option key={t} value={t}>{t}</option>)}
@@ -122,6 +204,32 @@ export function SettingsDrawer({
             Save profile
           </button>
         </div>
+
+        {/* Notifications & install */}
+        <div className="mt-8 space-y-2">
+          <div className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Notifications</div>
+          <button onClick={toggleNotifications}
+            className="flex w-full items-center gap-3 rounded-2xl bg-muted px-4 py-3 text-left">
+            <span className="grid h-9 w-9 place-items-center rounded-xl bg-primary-soft text-primary"><Bell className="h-4 w-4" /></span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-bold">Nudge alerts</span>
+              <span className="block text-xs text-muted-foreground">
+                {profile.push_enabled ? "On — you'll get a device alert" : perm === "denied" ? "Blocked in browser settings" : "Off — nudges show in-app only"}
+              </span>
+            </span>
+            <span className={`h-6 w-11 shrink-0 rounded-full p-0.5 transition ${profile.push_enabled ? "bg-success" : "bg-border"}`}>
+              <span className={`block h-5 w-5 rounded-full bg-surface transition ${profile.push_enabled ? "translate-x-5" : ""}`} />
+            </span>
+          </button>
+          <button onClick={installApp} className="flex w-full items-center gap-3 rounded-2xl bg-muted px-4 py-3 text-left">
+            <span className="grid h-9 w-9 place-items-center rounded-xl bg-secondary-soft text-secondary"><Download className="h-4 w-4" /></span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-bold">Install PairUp</span>
+              <span className="block text-xs text-muted-foreground">Add it to your home screen like a real app</span>
+            </span>
+          </button>
+        </div>
+
 
         {/* Plan */}
         <div className="mt-8">

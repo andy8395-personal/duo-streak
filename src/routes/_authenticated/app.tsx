@@ -3,11 +3,12 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Copy, Share2, Plus, Bell, Users, UserPlus, ChevronDown, Home, Snowflake,
-  PlayCircle, Trophy, Flame, Sparkles,
+  PlayCircle, Trophy, Flame, Sparkles, BarChart3, Settings as SettingsIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 import logo from "@/assets/pairup-logo.png.asset.json";
 import { supabase } from "@/integrations/supabase/client";
+import { showLocalNotification } from "@/lib/notifications";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -25,6 +26,8 @@ import { NudgeSheet } from "@/components/pairup/NudgeSheet";
 import { SettingsDrawer } from "@/components/pairup/SettingsDrawer";
 import { RewardedVideoDialog } from "@/components/pairup/RewardedVideo";
 import { DayStat, MonthlyCalendar, WeeklyRibbon } from "@/components/pairup/History";
+import { Avatar } from "@/components/pairup/Avatar";
+import { AnalyticsView } from "@/components/pairup/Analytics";
 
 export const Route = createFileRoute("/_authenticated/app")({
   head: () => ({
@@ -62,6 +65,7 @@ function Dashboard() {
   const [rv, setRv] = useState<null | "habit" | "partner">(null);
   const [celebrated, setCelebrated] = useState<string | null>(null);
   const [showCelebration, setShowCelebration] = useState(false);
+  const [tab, setTab] = useState<"home" | "stats">("home");
 
   /* ------------------------- loaders ------------------------- */
   const refreshProfile = useCallback(async (uid: string) => {
@@ -141,7 +145,11 @@ function Dashboard() {
       .on("postgres_changes", { event: "*", schema: "public", table: "reactions" }, reload)
       .on("postgres_changes", { event: "*", schema: "public", table: "nudges", filter: `pair_id=eq.${activePair.id}` }, (payload) => {
         const n = payload.new as Nudge | undefined;
-        if (n && n.recipient_id === userId) toast(n.message, { icon: "🔔" });
+        if (n && n.recipient_id === userId) {
+          toast(n.message, { icon: "🔔" });
+          showLocalNotification("PairUp nudge", n.message);
+          haptic(30);
+        }
         reload();
       })
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "pairs", filter: `id=eq.${activePair.id}` }, (payload) => {
@@ -315,8 +323,8 @@ function Dashboard() {
             <div className="flex items-start justify-between px-6 pt-6">
               <img src={logo.url} alt="PairUp" className="h-9 w-auto" />
               <div className="flex items-start gap-3">
-                <PersonPill emoji={profile.avatar_emoji} name={profile.display_name} done={myDone} total={habits.length} onClick={() => setSettingsOpen(true)} highlight />
-                <PersonPill emoji={partner?.avatar_emoji ?? "➕"} name={partner?.display_name ?? "Invite"} done={theirDone} total={habits.length} onClick={copyInvite} />
+                <PersonPill emoji={profile.avatar_emoji} avatarPath={profile.avatar_url} name={profile.display_name} done={myDone} total={habits.length} onClick={() => setSettingsOpen(true)} highlight />
+                <PersonPill emoji={partner?.avatar_emoji ?? "➕"} avatarPath={partner?.avatar_url} name={partner?.display_name ?? "Invite"} done={theirDone} total={habits.length} onClick={copyInvite} />
               </div>
             </div>
 
@@ -346,6 +354,10 @@ function Dashboard() {
               )}
             </div>
 
+            {tab === "stats" ? (
+              <AnalyticsView stats={stats} pair={activePair} youName={profile.display_name} partnerName={partnerName} />
+            ) : (
+              <>
             <StreakHero
               streak={activePair.current_streak}
               longest={activePair.longest_streak}
@@ -449,6 +461,8 @@ function Dashboard() {
                 </button>
               </div>
             )}
+              </>
+            )}
           </motion.div>
         )}
       </div>
@@ -457,12 +471,15 @@ function Dashboard() {
       {activePair && (
         <nav className="fixed inset-x-0 bottom-0 z-30 mx-auto w-full max-w-[440px] px-6 pb-5">
           <div className="flex items-center justify-around rounded-full bg-surface/95 px-2 py-2 shadow-[0_-6px_30px_rgba(0,0,0,0.08)] backdrop-blur">
-            <NavBtn icon={Home} label="Home" active onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })} />
-            <button onClick={() => { setNudgeHabitId(null); setNudgeOpen(true); }}
+            <NavBtn icon={Home} label="Home" active={tab === "home"}
+              onClick={() => { setTab("home"); window.scrollTo({ top: 0, behavior: "smooth" }); }} />
+            <NavBtn icon={BarChart3} label="Stats" active={tab === "stats"}
+              onClick={() => { setTab("stats"); window.scrollTo({ top: 0, behavior: "smooth" }); }} />
+            <button onClick={() => { setNudgeHabitId(null); setNudgeOpen(true); }} aria-label="Send a nudge"
               className="-mt-8 grid h-16 w-16 place-items-center rounded-full bg-primary text-primary-foreground shadow-[var(--shadow-primary)] transition active:scale-90">
               <Bell className="h-6 w-6" />
             </button>
-            <NavBtn icon={Users} label="Settings" onClick={() => setSettingsOpen(true)} />
+            <NavBtn icon={SettingsIcon} label="Settings" onClick={() => setSettingsOpen(true)} />
           </div>
         </nav>
       )}
@@ -540,21 +557,23 @@ function Dashboard() {
 
 function NavBtn({ icon: Icon, label, active, onClick }: { icon: React.ComponentType<{ className?: string }>; label: string; active?: boolean; onClick: () => void }) {
   return (
-    <button onClick={onClick} className={`flex w-20 flex-col items-center gap-0.5 rounded-full py-2 text-[11px] font-bold ${active ? "text-primary" : "text-muted-foreground"}`}>
+    <button onClick={onClick} className={`flex w-16 flex-col items-center gap-0.5 rounded-full py-2 text-[11px] font-bold ${active ? "text-primary" : "text-muted-foreground"}`}>
       <Icon className="h-5 w-5" />
       {label}
     </button>
   );
 }
 
-function PersonPill({ emoji, name, done, total, onClick, highlight }: {
-  emoji: string; name: string; done: number; total: number; onClick: () => void; highlight?: boolean;
+function PersonPill({ emoji, avatarPath, name, done, total, onClick, highlight }: {
+  emoji: string; avatarPath?: string | null; name: string; done: number; total: number; onClick: () => void; highlight?: boolean;
 }) {
   const complete = total > 0 && done >= total;
   return (
     <button onClick={onClick} className="flex w-16 flex-col items-center gap-1 transition active:scale-95">
-      <span className={`relative grid h-12 w-12 place-items-center rounded-full text-xl shadow-[var(--shadow-card)] ${complete ? "bg-success-soft ring-2 ring-success" : highlight ? "bg-primary-soft ring-2 ring-primary/40" : "bg-surface"}`}>
-        {emoji}
+      <span className={`relative grid h-12 w-12 place-items-center overflow-visible rounded-full text-xl shadow-[var(--shadow-card)] ${complete ? "bg-success-soft ring-2 ring-success" : highlight ? "bg-primary-soft ring-2 ring-primary/40" : "bg-surface"}`}>
+        <span className="grid h-12 w-12 place-items-center overflow-hidden rounded-full">
+          <Avatar emoji={emoji} avatarPath={avatarPath} alt={name} />
+        </span>
         {total > 0 && (
           <span className={`absolute -bottom-1 rounded-full px-1.5 text-[10px] font-bold ${complete ? "bg-success text-success-foreground" : "bg-muted text-muted-foreground"}`}>
             {done}/{total}
@@ -680,7 +699,9 @@ function Onboarding({ onCreated, onSettings, profile }: { onCreated: () => Promi
       <div className="flex items-start justify-between">
         <img src={logo.url} alt="PairUp" className="h-9 w-auto" />
         <button onClick={onSettings} className="flex w-16 flex-col items-center gap-1">
-          <span className="grid h-12 w-12 place-items-center rounded-full bg-surface text-xl shadow-[var(--shadow-card)]">{profile.avatar_emoji}</span>
+          <span className="grid h-12 w-12 place-items-center overflow-hidden rounded-full bg-surface text-xl shadow-[var(--shadow-card)]">
+            <Avatar emoji={profile.avatar_emoji} avatarPath={profile.avatar_url} alt={profile.display_name} />
+          </span>
           <span className="w-full truncate text-center text-[11px] font-bold text-muted-foreground">{profile.display_name}</span>
         </button>
       </div>
