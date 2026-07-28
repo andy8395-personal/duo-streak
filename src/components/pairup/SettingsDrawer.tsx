@@ -65,7 +65,7 @@ export function SettingsDrawer({
   const slots = profile.partner_slots ?? 1;
   const canAddPartner = pairs.length < slots;
 
-  const patchProfile = async (patch: Record<string, unknown>) => {
+  const patchProfile = async (patch: { avatar_url?: string | null; push_enabled?: boolean }) => {
     const { data, error } = await supabase.from("profiles").update(patch).eq("id", userId).select().single();
     if (error) { toast.error(error.message); return null; }
     onProfileChanged(data as Profile);
