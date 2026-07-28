@@ -557,7 +557,7 @@ function Dashboard() {
 
 function NavBtn({ icon: Icon, label, active, onClick }: { icon: React.ComponentType<{ className?: string }>; label: string; active?: boolean; onClick: () => void }) {
   return (
-    <button onClick={onClick} className={`flex w-20 flex-col items-center gap-0.5 rounded-full py-2 text-[11px] font-bold ${active ? "text-primary" : "text-muted-foreground"}`}>
+    <button onClick={onClick} className={`flex w-16 flex-col items-center gap-0.5 rounded-full py-2 text-[11px] font-bold ${active ? "text-primary" : "text-muted-foreground"}`}>
       <Icon className="h-5 w-5" />
       {label}
     </button>
