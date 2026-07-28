@@ -471,12 +471,15 @@ function Dashboard() {
       {activePair && (
         <nav className="fixed inset-x-0 bottom-0 z-30 mx-auto w-full max-w-[440px] px-6 pb-5">
           <div className="flex items-center justify-around rounded-full bg-surface/95 px-2 py-2 shadow-[0_-6px_30px_rgba(0,0,0,0.08)] backdrop-blur">
-            <NavBtn icon={Home} label="Home" active onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })} />
-            <button onClick={() => { setNudgeHabitId(null); setNudgeOpen(true); }}
+            <NavBtn icon={Home} label="Home" active={tab === "home"}
+              onClick={() => { setTab("home"); window.scrollTo({ top: 0, behavior: "smooth" }); }} />
+            <NavBtn icon={BarChart3} label="Stats" active={tab === "stats"}
+              onClick={() => { setTab("stats"); window.scrollTo({ top: 0, behavior: "smooth" }); }} />
+            <button onClick={() => { setNudgeHabitId(null); setNudgeOpen(true); }} aria-label="Send a nudge"
               className="-mt-8 grid h-16 w-16 place-items-center rounded-full bg-primary text-primary-foreground shadow-[var(--shadow-primary)] transition active:scale-90">
               <Bell className="h-6 w-6" />
             </button>
-            <NavBtn icon={Users} label="Settings" onClick={() => setSettingsOpen(true)} />
+            <NavBtn icon={SettingsIcon} label="Settings" onClick={() => setSettingsOpen(true)} />
           </div>
         </nav>
       )}
