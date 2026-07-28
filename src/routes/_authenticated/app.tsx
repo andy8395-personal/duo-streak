@@ -354,6 +354,10 @@ function Dashboard() {
               )}
             </div>
 
+            {tab === "stats" ? (
+              <AnalyticsView stats={stats} pair={activePair} youName={profile.display_name} partnerName={partnerName} />
+            ) : (
+              <>
             <StreakHero
               streak={activePair.current_streak}
               longest={activePair.longest_streak}
