@@ -323,8 +323,8 @@ function Dashboard() {
             <div className="flex items-start justify-between px-6 pt-6">
               <img src={logo.url} alt="PairUp" className="h-9 w-auto" />
               <div className="flex items-start gap-3">
-                <PersonPill emoji={profile.avatar_emoji} name={profile.display_name} done={myDone} total={habits.length} onClick={() => setSettingsOpen(true)} highlight />
-                <PersonPill emoji={partner?.avatar_emoji ?? "➕"} name={partner?.display_name ?? "Invite"} done={theirDone} total={habits.length} onClick={copyInvite} />
+                <PersonPill emoji={profile.avatar_emoji} avatarPath={profile.avatar_url} name={profile.display_name} done={myDone} total={habits.length} onClick={() => setSettingsOpen(true)} highlight />
+                <PersonPill emoji={partner?.avatar_emoji ?? "➕"} avatarPath={partner?.avatar_url} name={partner?.display_name ?? "Invite"} done={theirDone} total={habits.length} onClick={copyInvite} />
               </div>
             </div>
 
@@ -699,7 +699,9 @@ function Onboarding({ onCreated, onSettings, profile }: { onCreated: () => Promi
       <div className="flex items-start justify-between">
         <img src={logo.url} alt="PairUp" className="h-9 w-auto" />
         <button onClick={onSettings} className="flex w-16 flex-col items-center gap-1">
-          <span className="grid h-12 w-12 place-items-center rounded-full bg-surface text-xl shadow-[var(--shadow-card)]">{profile.avatar_emoji}</span>
+          <span className="grid h-12 w-12 place-items-center overflow-hidden rounded-full bg-surface text-xl shadow-[var(--shadow-card)]">
+            <Avatar emoji={profile.avatar_emoji} avatarPath={profile.avatar_url} alt={profile.display_name} />
+          </span>
           <span className="w-full truncate text-center text-[11px] font-bold text-muted-foreground">{profile.display_name}</span>
         </button>
       </div>
