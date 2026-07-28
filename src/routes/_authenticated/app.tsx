@@ -564,14 +564,16 @@ function NavBtn({ icon: Icon, label, active, onClick }: { icon: React.ComponentT
   );
 }
 
-function PersonPill({ emoji, name, done, total, onClick, highlight }: {
-  emoji: string; name: string; done: number; total: number; onClick: () => void; highlight?: boolean;
+function PersonPill({ emoji, avatarPath, name, done, total, onClick, highlight }: {
+  emoji: string; avatarPath?: string | null; name: string; done: number; total: number; onClick: () => void; highlight?: boolean;
 }) {
   const complete = total > 0 && done >= total;
   return (
     <button onClick={onClick} className="flex w-16 flex-col items-center gap-1 transition active:scale-95">
-      <span className={`relative grid h-12 w-12 place-items-center rounded-full text-xl shadow-[var(--shadow-card)] ${complete ? "bg-success-soft ring-2 ring-success" : highlight ? "bg-primary-soft ring-2 ring-primary/40" : "bg-surface"}`}>
-        {emoji}
+      <span className={`relative grid h-12 w-12 place-items-center overflow-visible rounded-full text-xl shadow-[var(--shadow-card)] ${complete ? "bg-success-soft ring-2 ring-success" : highlight ? "bg-primary-soft ring-2 ring-primary/40" : "bg-surface"}`}>
+        <span className="grid h-12 w-12 place-items-center overflow-hidden rounded-full">
+          <Avatar emoji={emoji} avatarPath={avatarPath} alt={name} />
+        </span>
         {total > 0 && (
           <span className={`absolute -bottom-1 rounded-full px-1.5 text-[10px] font-bold ${complete ? "bg-success text-success-foreground" : "bg-muted text-muted-foreground"}`}>
             {done}/{total}
