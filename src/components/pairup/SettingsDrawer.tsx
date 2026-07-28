@@ -42,17 +42,72 @@ export function SettingsDrawer({
   const [addMode, setAddMode] = useState<null | "create" | "join">(null);
   const [joinCode, setJoinCode] = useState("");
   const [newCode, setNewCode] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [perm, setPerm] = useState<string>("default");
+  const [installEvt, setInstallEvt] = useState<any>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (open) {
       setName(profile.display_name); setEmoji(profile.avatar_emoji);
       setTz(profile.timezone); setReminder(profile.reminder_time ?? "");
       setAddMode(null); setNewCode(null); setJoinCode("");
+      setPerm(notificationPermission());
     }
   }, [open, profile]);
 
+  useEffect(() => {
+    const handler = (e: Event) => { e.preventDefault(); setInstallEvt(e); };
+    window.addEventListener("beforeinstallprompt", handler);
+    return () => window.removeEventListener("beforeinstallprompt", handler);
+  }, []);
+
   const slots = profile.partner_slots ?? 1;
   const canAddPartner = pairs.length < slots;
+
+  const patchProfile = async (patch: Record<string, unknown>) => {
+    const { data, error } = await supabase.from("profiles").update(patch).eq("id", userId).select().single();
+    if (error) { toast.error(error.message); return null; }
+    onProfileChanged(data as Profile);
+    return data as Profile;
+  };
+
+  const uploadAvatar = async (file: File) => {
+    if (!file.type.startsWith("image/")) { toast.error("Pick an image file"); return; }
+    if (file.size > 5 * 1024 * 1024) { toast.error("Keep it under 5 MB"); return; }
+    setUploading(true);
+    const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
+    const path = `${userId}/avatar-${Date.now()}.${ext}`;
+    const { error } = await supabase.storage.from("avatars").upload(path, file, { upsert: true });
+    if (error) { setUploading(false); toast.error(error.message); return; }
+    if (profile.avatar_url) await supabase.storage.from("avatars").remove([profile.avatar_url]);
+    await patchProfile({ avatar_url: path });
+    setUploading(false);
+    toast.success("Photo updated");
+  };
+
+  const removeAvatar = async () => {
+    if (profile.avatar_url) await supabase.storage.from("avatars").remove([profile.avatar_url]);
+    await patchProfile({ avatar_url: null });
+    toast.success("Back to your emoji");
+  };
+
+  const toggleNotifications = async () => {
+    if (profile.push_enabled) { await patchProfile({ push_enabled: false }); toast("Reminders off"); return; }
+    const result = await requestNotificationPermission();
+    setPerm(result);
+    if (result === "unsupported") { toast.error("This device doesn't support notifications"); return; }
+    if (result !== "granted") { toast.error("Notifications blocked — enable them in your browser settings"); return; }
+    await patchProfile({ push_enabled: true });
+    toast.success("Nudges will now buzz your device 🔔");
+  };
+
+  const installApp = async () => {
+    if (!installEvt) { toast("On iPhone: tap Share → Add to Home Screen"); return; }
+    installEvt.prompt();
+    setInstallEvt(null);
+  };
+
 
   const saveProfile = async () => {
     const { data, error } = await supabase.from("profiles").update({
