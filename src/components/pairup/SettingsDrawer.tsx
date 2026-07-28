@@ -205,6 +205,32 @@ export function SettingsDrawer({
           </button>
         </div>
 
+        {/* Notifications & install */}
+        <div className="mt-8 space-y-2">
+          <div className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Notifications</div>
+          <button onClick={toggleNotifications}
+            className="flex w-full items-center gap-3 rounded-2xl bg-muted px-4 py-3 text-left">
+            <span className="grid h-9 w-9 place-items-center rounded-xl bg-primary-soft text-primary"><Bell className="h-4 w-4" /></span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-bold">Nudge alerts</span>
+              <span className="block text-xs text-muted-foreground">
+                {profile.push_enabled ? "On — you'll get a device alert" : perm === "denied" ? "Blocked in browser settings" : "Off — nudges show in-app only"}
+              </span>
+            </span>
+            <span className={`h-6 w-11 shrink-0 rounded-full p-0.5 transition ${profile.push_enabled ? "bg-success" : "bg-border"}`}>
+              <span className={`block h-5 w-5 rounded-full bg-surface transition ${profile.push_enabled ? "translate-x-5" : ""}`} />
+            </span>
+          </button>
+          <button onClick={installApp} className="flex w-full items-center gap-3 rounded-2xl bg-muted px-4 py-3 text-left">
+            <span className="grid h-9 w-9 place-items-center rounded-xl bg-secondary-soft text-secondary"><Download className="h-4 w-4" /></span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-bold">Install PairUp</span>
+              <span className="block text-xs text-muted-foreground">Add it to your home screen like a real app</span>
+            </span>
+          </button>
+        </div>
+
+
         {/* Plan */}
         <div className="mt-8">
           <div className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Your plan</div>
