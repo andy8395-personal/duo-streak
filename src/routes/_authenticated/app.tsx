@@ -3,11 +3,12 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Copy, Share2, Plus, Bell, Users, UserPlus, ChevronDown, Home, Snowflake,
-  PlayCircle, Trophy, Flame, Sparkles,
+  PlayCircle, Trophy, Flame, Sparkles, BarChart3, Settings as SettingsIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 import logo from "@/assets/pairup-logo.png.asset.json";
 import { supabase } from "@/integrations/supabase/client";
+import { showLocalNotification } from "@/lib/notifications";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -25,6 +26,8 @@ import { NudgeSheet } from "@/components/pairup/NudgeSheet";
 import { SettingsDrawer } from "@/components/pairup/SettingsDrawer";
 import { RewardedVideoDialog } from "@/components/pairup/RewardedVideo";
 import { DayStat, MonthlyCalendar, WeeklyRibbon } from "@/components/pairup/History";
+import { Avatar } from "@/components/pairup/Avatar";
+import { AnalyticsView } from "@/components/pairup/Analytics";
 
 export const Route = createFileRoute("/_authenticated/app")({
   head: () => ({
