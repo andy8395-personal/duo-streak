@@ -65,6 +65,7 @@ function Dashboard() {
   const [rv, setRv] = useState<null | "habit" | "partner">(null);
   const [celebrated, setCelebrated] = useState<string | null>(null);
   const [showCelebration, setShowCelebration] = useState(false);
+  const [tab, setTab] = useState<"home" | "stats">("home");
 
   /* ------------------------- loaders ------------------------- */
   const refreshProfile = useCallback(async (uid: string) => {
@@ -144,7 +145,11 @@ function Dashboard() {
       .on("postgres_changes", { event: "*", schema: "public", table: "reactions" }, reload)
       .on("postgres_changes", { event: "*", schema: "public", table: "nudges", filter: `pair_id=eq.${activePair.id}` }, (payload) => {
         const n = payload.new as Nudge | undefined;
-        if (n && n.recipient_id === userId) toast(n.message, { icon: "🔔" });
+        if (n && n.recipient_id === userId) {
+          toast(n.message, { icon: "🔔" });
+          showLocalNotification("PairUp nudge", n.message);
+          haptic(30);
+        }
         reload();
       })
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "pairs", filter: `id=eq.${activePair.id}` }, (payload) => {
