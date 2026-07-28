@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   Settings as SettingsIcon, LogOut, UserPlus, Users, Copy, Trash2, Crown, PlayCircle, Check,
+  Camera, Bell, X, Download,
 } from "lucide-react";
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription,
@@ -12,6 +13,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { EMOJIS, Pair, Profile, TIMEZONES } from "./types";
+import { Avatar } from "./Avatar";
+import { notificationPermission, requestNotificationPermission } from "@/lib/notifications";
 
 export function SettingsDrawer({
   open, onOpenChange, profile, pairs, profiles, activePairId, userId,
