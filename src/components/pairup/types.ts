@@ -38,11 +38,13 @@ export type Profile = {
   id: string;
   display_name: string;
   avatar_emoji: string;
+  avatar_url: string | null;
   timezone: string;
   reminder_time: string | null;
   active_pair_id: string | null;
   plan: string;
   partner_slots: number;
+  push_enabled: boolean;
 };
 
 export type Pair = {
