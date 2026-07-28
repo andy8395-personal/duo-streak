@@ -461,6 +461,8 @@ function Dashboard() {
                 </button>
               </div>
             )}
+              </>
+            )}
           </motion.div>
         )}
       </div>
