@@ -181,11 +181,13 @@ export type Database = {
         Row: {
           active_pair_id: string | null
           avatar_emoji: string
+          avatar_url: string | null
           created_at: string
           display_name: string
           id: string
           partner_slots: number
           plan: string
+          push_enabled: boolean
           reminder_time: string | null
           timezone: string
           updated_at: string
@@ -193,11 +195,13 @@ export type Database = {
         Insert: {
           active_pair_id?: string | null
           avatar_emoji?: string
+          avatar_url?: string | null
           created_at?: string
           display_name?: string
           id: string
           partner_slots?: number
           plan?: string
+          push_enabled?: boolean
           reminder_time?: string | null
           timezone?: string
           updated_at?: string
@@ -205,11 +209,13 @@ export type Database = {
         Update: {
           active_pair_id?: string | null
           avatar_emoji?: string
+          avatar_url?: string | null
           created_at?: string
           display_name?: string
           id?: string
           partner_slots?: number
           plan?: string
+          push_enabled?: boolean
           reminder_time?: string | null
           timezone?: string
           updated_at?: string
