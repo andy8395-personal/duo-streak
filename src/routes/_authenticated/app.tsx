@@ -388,11 +388,14 @@ function Dashboard() {
             <WeeklyRibbon stats={stats} />
 
             {/* habits */}
-            <div className="mt-6 px-6">
-              <div className="mb-3 flex items-center justify-between">
-                <h2 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Today's habits</h2>
+            <div className="mx-6 mt-6 rounded-[28px] bg-surface/70 p-4 ring-1 ring-primary/15">
+              <div className="mb-3 flex items-center gap-2">
+                <span className="grid h-7 w-7 place-items-center rounded-lg bg-primary-soft text-primary"><Check className="h-3.5 w-3.5" strokeWidth={3} /></span>
+                <h2 className="text-xs font-bold uppercase tracking-wider text-primary">Today's habits</h2>
+                <span className="h-px flex-1 bg-border" />
                 <span className="text-xs font-bold text-muted-foreground">{habits.length}/{habitSlots}</span>
               </div>
+
 
               <div className="space-y-3">
                 {loading ? (
