@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
 import {
   Settings as SettingsIcon, LogOut, UserPlus, Users, Copy, Trash2, Crown, PlayCircle, Check,
@@ -34,6 +35,7 @@ export function SettingsDrawer({
   onAddPartner: () => Promise<void>;
   onUnlockPartner: () => void;
 }) {
+  const navigate = useNavigate();
   const [name, setName] = useState(profile.display_name);
   const [emoji, setEmoji] = useState(profile.avatar_emoji);
   const [tz, setTz] = useState(profile.timezone);
