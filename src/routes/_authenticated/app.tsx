@@ -355,7 +355,12 @@ function Dashboard() {
             </div>
 
             {tab === "stats" ? (
-              <AnalyticsView stats={stats} pair={activePair} youName={profile.display_name} partnerName={partnerName} />
+              <AnalyticsView
+                stats={stats} pair={activePair} youName={profile.display_name} partnerName={partnerName}
+                pairs={pairs} userId={userId}
+                profileNames={Object.fromEntries(Object.entries(profiles).map(([k, v]) => [k, v.display_name]))}
+                onSwitch={switchPair}
+              />
             ) : (
               <>
             <StreakHero
