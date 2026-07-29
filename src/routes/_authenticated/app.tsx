@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Copy, Share2, Plus, Bell, Users, UserPlus, ChevronDown, Home, Snowflake,
+  Copy, Share2, Plus, Bell, Users, UserPlus, ChevronDown, Home, Snowflake, Check,
   PlayCircle, Trophy, Flame, Sparkles, BarChart3, Settings as SettingsIcon,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -355,7 +355,12 @@ function Dashboard() {
             </div>
 
             {tab === "stats" ? (
-              <AnalyticsView stats={stats} pair={activePair} youName={profile.display_name} partnerName={partnerName} />
+              <AnalyticsView
+                stats={stats} pair={activePair} youName={profile.display_name} partnerName={partnerName}
+                pairs={pairs} userId={userId}
+                profileNames={Object.fromEntries(Object.entries(profiles).map(([k, v]) => [k, v.display_name]))}
+                onSwitch={switchPair}
+              />
             ) : (
               <>
             <StreakHero
@@ -383,16 +388,19 @@ function Dashboard() {
               </div>
             )}
 
-            {!partner && <PendingPartner code={activePair.invite_code} onCopy={copyInvite} />}
+            {!partner && <PendingPartner onCopy={copyInvite} />}
 
             <WeeklyRibbon stats={stats} />
 
             {/* habits */}
-            <div className="mt-6 px-6">
-              <div className="mb-3 flex items-center justify-between">
-                <h2 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Today's habits</h2>
+            <div className="mx-6 mt-6 rounded-[28px] bg-surface/70 p-4 ring-1 ring-primary/15">
+              <div className="mb-3 flex items-center gap-2">
+                <span className="grid h-7 w-7 place-items-center rounded-lg bg-primary-soft text-primary"><Check className="h-3.5 w-3.5" strokeWidth={3} /></span>
+                <h2 className="text-xs font-bold uppercase tracking-wider text-primary">Today's habits</h2>
+                <span className="h-px flex-1 bg-border" />
                 <span className="text-xs font-bold text-muted-foreground">{habits.length}/{habitSlots}</span>
               </div>
+
 
               <div className="space-y-3">
                 {loading ? (
@@ -445,22 +453,14 @@ function Dashboard() {
               </div>
             </div>
 
+            {/* history & insights — visually separate from today's habits */}
+            <div className="mx-6 mt-8 mb-1 flex items-center gap-2">
+              <span className="grid h-7 w-7 place-items-center rounded-lg bg-secondary-soft text-secondary"><BarChart3 className="h-3.5 w-3.5" /></span>
+              <h2 className="text-xs font-bold uppercase tracking-wider text-secondary">History &amp; insights</h2>
+              <span className="h-px flex-1 bg-border" />
+            </div>
             <MonthlyCalendar stats={stats} />
 
-            {/* freeze card */}
-            {!streakBroken && (
-              <div className="mx-6 mt-4 flex items-center gap-3 rounded-3xl bg-surface px-5 py-4 shadow-[var(--shadow-card)]">
-                <span className="grid h-10 w-10 place-items-center rounded-xl bg-secondary-soft text-secondary"><Snowflake className="h-5 w-5" /></span>
-                <div className="flex-1">
-                  <div className="text-sm font-bold">Streak Freeze</div>
-                  <div className="text-xs text-muted-foreground">{freezeUsedThisMonth ? "Used this month — extras come with Pro" : "1 free save per month if life gets in the way"}</div>
-                </div>
-                <button onClick={freezeUsedThisMonth ? () => toast("Extra freezes are part of Pro ✨") : useFreeze}
-                  className="rounded-full bg-secondary px-4 py-2 text-xs font-bold text-secondary-foreground">
-                  {freezeUsedThisMonth ? "Get Pro" : "Use"}
-                </button>
-              </div>
-            )}
               </>
             )}
           </motion.div>
@@ -624,11 +624,11 @@ function StreakHero({ streak, longest, complete, myDone, theirDone, total, partn
   );
 }
 
-function PendingPartner({ code, onCopy }: { code: string; onCopy: () => void }) {
+function PendingPartner({ onCopy }: { onCopy: () => void }) {
   return (
     <div className="mx-6 mt-4 rounded-3xl bg-secondary-soft p-5 text-center">
       <div className="text-sm font-bold text-secondary">Waiting for your partner to join</div>
-      <div className="mt-2 font-mono text-2xl font-bold tracking-[0.25em] text-secondary">{code}</div>
+      <p className="mt-1 text-xs text-muted-foreground">Share your invite code from the badge at the top.</p>
       <button onClick={onCopy} className="mt-3 inline-flex items-center gap-2 rounded-full bg-surface px-4 py-2 text-xs font-bold text-secondary">
         <Copy className="h-3.5 w-3.5" /> Copy invite code
       </button>

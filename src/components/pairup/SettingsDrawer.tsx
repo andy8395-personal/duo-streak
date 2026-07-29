@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
 import {
   Settings as SettingsIcon, LogOut, UserPlus, Users, Copy, Trash2, Crown, PlayCircle, Check,
@@ -34,6 +35,7 @@ export function SettingsDrawer({
   onAddPartner: () => Promise<void>;
   onUnlockPartner: () => void;
 }) {
+  const navigate = useNavigate();
   const [name, setName] = useState(profile.display_name);
   const [emoji, setEmoji] = useState(profile.avatar_emoji);
   const [tz, setTz] = useState(profile.timezone);
@@ -107,6 +109,7 @@ export function SettingsDrawer({
     installEvt.prompt();
     setInstallEvt(null);
   };
+  const goPremium = () => { onOpenChange(false); navigate({ to: "/premium" }); };
 
 
   const saveProfile = async () => {
@@ -247,9 +250,9 @@ export function SettingsDrawer({
               <li className="flex items-center gap-2"><Check className="h-3.5 w-3.5" /> 1 Streak Freeze every month</li>
               <li className="flex items-center gap-2"><Check className="h-3.5 w-3.5" /> 3 habits, 4th unlocked with a short video</li>
             </ul>
-            <button onClick={() => toast("Subscriptions are coming soon ✨")}
+            <button onClick={goPremium}
               className="mt-4 w-full rounded-full bg-surface px-4 py-2.5 text-xs font-bold text-secondary">
-              Upgrade for unlimited partners & freezes
+              See PairUp Pro
             </button>
           </div>
         </div>
@@ -263,7 +266,7 @@ export function SettingsDrawer({
                 <div className="grid h-9 w-9 place-items-center rounded-xl bg-surface text-sm"><Users className="h-4 w-4 text-muted-foreground" /></div>
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-sm font-bold">{partnerNameFor(p)}</div>
-                  <div className="text-xs text-muted-foreground">🔥 {p.current_streak} day streak · code {p.invite_code}</div>
+                  <div className="text-xs text-muted-foreground">🔥 {p.current_streak} day streak</div>
                 </div>
                 {p.id !== activePairId && (
                   <button onClick={() => onSwitch(p.id)} className="rounded-full bg-surface px-3 py-1.5 text-xs font-bold text-primary">Switch</button>
@@ -288,11 +291,9 @@ export function SettingsDrawer({
             ) : addMode === "create" ? (
               <div className="mt-3 rounded-2xl bg-muted p-4 text-center">
                 {newCode ? (
-                  <>
-                    <div className="font-mono text-2xl font-bold tracking-[0.25em] text-primary">{newCode}</div>
-                    <button onClick={() => { navigator.clipboard.writeText(newCode).then(() => toast.success("Copied!")).catch(() => {}); }}
-                      className="mt-2 inline-flex items-center gap-2 rounded-full bg-surface px-4 py-2 text-xs font-bold"><Copy className="h-3.5 w-3.5" /> Copy code</button>
-                  </>
+                  <p className="text-xs text-muted-foreground">
+                    New pair created and made active. Your invite code is on the home screen badge — tap it to copy.
+                  </p>
                 ) : <div className="text-sm text-muted-foreground">Generating…</div>}
               </div>
             ) : (
@@ -303,17 +304,17 @@ export function SettingsDrawer({
                   className="w-full rounded-full bg-primary px-4 py-3 text-sm font-bold text-primary-foreground disabled:bg-muted disabled:text-muted-foreground">Join</button>
               </div>
             )
-          ) : slots < 2 ? (
+          ) : slots < 2 && pairs.some((p) => !!p.user2_id) ? (
             <button onClick={onUnlockPartner}
               className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-primary/40 bg-primary-soft px-4 py-4 text-xs font-bold text-primary">
               <PlayCircle className="h-4 w-4" /> Watch a short video to unlock a 2nd partner
             </button>
-          ) : (
-            <button onClick={() => toast("Subscriptions are coming soon ✨")}
+          ) : slots >= 2 ? (
+            <button onClick={goPremium}
               className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl bg-secondary-soft px-4 py-4 text-xs font-bold text-secondary">
               <Crown className="h-4 w-4" /> Upgrade to add a 3rd partner
             </button>
-          )}
+          ) : null}
         </div>
 
         <button onClick={onSignOut} className="mt-8 mb-8 flex w-full items-center justify-center gap-2 rounded-full bg-destructive/10 px-5 py-3 text-sm font-bold text-destructive">
