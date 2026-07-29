@@ -619,11 +619,11 @@ function StreakHero({ streak, longest, complete, myDone, theirDone, total, partn
   );
 }
 
-function PendingPartner({ code, onCopy }: { code: string; onCopy: () => void }) {
+function PendingPartner({ onCopy }: { onCopy: () => void }) {
   return (
     <div className="mx-6 mt-4 rounded-3xl bg-secondary-soft p-5 text-center">
       <div className="text-sm font-bold text-secondary">Waiting for your partner to join</div>
-      <div className="mt-2 font-mono text-2xl font-bold tracking-[0.25em] text-secondary">{code}</div>
+      <p className="mt-1 text-xs text-muted-foreground">Share your invite code from the badge at the top.</p>
       <button onClick={onCopy} className="mt-3 inline-flex items-center gap-2 rounded-full bg-surface px-4 py-2 text-xs font-bold text-secondary">
         <Copy className="h-3.5 w-3.5" /> Copy invite code
       </button>
