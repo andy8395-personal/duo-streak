@@ -263,7 +263,7 @@ export function SettingsDrawer({
                 <div className="grid h-9 w-9 place-items-center rounded-xl bg-surface text-sm"><Users className="h-4 w-4 text-muted-foreground" /></div>
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-sm font-bold">{partnerNameFor(p)}</div>
-                  <div className="text-xs text-muted-foreground">🔥 {p.current_streak} day streak · code {p.invite_code}</div>
+                  <div className="text-xs text-muted-foreground">🔥 {p.current_streak} day streak</div>
                 </div>
                 {p.id !== activePairId && (
                   <button onClick={() => onSwitch(p.id)} className="rounded-full bg-surface px-3 py-1.5 text-xs font-bold text-primary">Switch</button>
