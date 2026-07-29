@@ -37,8 +37,12 @@ function Bar({ label, pct, className }: { label: string; pct: number; className:
 }
 
 export function AnalyticsView({
-  stats, pair, youName, partnerName,
-}: { stats: DayStat[]; pair: Pair; youName: string; partnerName: string }) {
+  stats, pair, youName, partnerName, pairs, userId, profileNames, onSwitch,
+}: {
+  stats: DayStat[]; pair: Pair; youName: string; partnerName: string;
+  pairs?: Pair[]; userId?: string; profileNames?: Record<string, string>;
+  onSwitch?: (pairId: string) => void;
+}) {
   const active = stats.filter((s) => s.total > 0);
   const days = active.length || 1;
   const minePct = Math.round((active.reduce((a, s) => a + s.mine, 0) / (days * (active[0]?.total || 1))) * 100);
@@ -46,12 +50,32 @@ export function AnalyticsView({
   const perfectDays = active.filter((s) => s.mine >= s.total && s.theirs >= s.total).length;
   const together = Math.round((perfectDays / days) * 100);
 
+  const list = pairs ?? [];
+  const nameFor = (p: Pair) => {
+    const oid = p.user1_id === userId ? p.user2_id : p.user1_id;
+    return (oid && profileNames?.[oid]) || `Code ${p.invite_code}`;
+  };
+
   return (
     <div className="flex flex-1 flex-col pb-32">
       <div className="px-6 pt-6">
         <h1 className="text-2xl font-bold tracking-tight">Your numbers</h1>
         <p className="mt-1 text-sm text-muted-foreground">Last {active.length} tracked days with {partnerName}.</p>
       </div>
+
+      {list.length > 1 && onSwitch && (
+        <div className="mt-4 flex gap-2 overflow-x-auto px-6 pb-1">
+          {list.map((p) => (
+            <button key={p.id} onClick={() => onSwitch(p.id)}
+              className={`shrink-0 rounded-full px-4 py-2 text-xs font-bold transition ${
+                p.id === pair.id ? "bg-primary text-primary-foreground shadow-[var(--shadow-primary)]" : "bg-muted text-muted-foreground"
+              }`}>
+              {nameFor(p)} · 🔥 {p.current_streak}
+            </button>
+          ))}
+        </div>
+      )}
+
 
       <div className="mt-5 grid grid-cols-2 gap-3 px-6">
         <Stat icon={Flame} label="Current streak" value={`${pair.current_streak}d`} tone="primary" />
