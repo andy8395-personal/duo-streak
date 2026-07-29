@@ -288,11 +288,9 @@ export function SettingsDrawer({
             ) : addMode === "create" ? (
               <div className="mt-3 rounded-2xl bg-muted p-4 text-center">
                 {newCode ? (
-                  <>
-                    <div className="font-mono text-2xl font-bold tracking-[0.25em] text-primary">{newCode}</div>
-                    <button onClick={() => { navigator.clipboard.writeText(newCode).then(() => toast.success("Copied!")).catch(() => {}); }}
-                      className="mt-2 inline-flex items-center gap-2 rounded-full bg-surface px-4 py-2 text-xs font-bold"><Copy className="h-3.5 w-3.5" /> Copy code</button>
-                  </>
+                  <p className="text-xs text-muted-foreground">
+                    New pair created and made active. Your invite code is on the home screen badge — tap it to copy.
+                  </p>
                 ) : <div className="text-sm text-muted-foreground">Generating…</div>}
               </div>
             ) : (
@@ -303,17 +301,17 @@ export function SettingsDrawer({
                   className="w-full rounded-full bg-primary px-4 py-3 text-sm font-bold text-primary-foreground disabled:bg-muted disabled:text-muted-foreground">Join</button>
               </div>
             )
-          ) : slots < 2 ? (
+          ) : slots < 2 && pairs.some((p) => !!p.user2_id) ? (
             <button onClick={onUnlockPartner}
               className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-primary/40 bg-primary-soft px-4 py-4 text-xs font-bold text-primary">
               <PlayCircle className="h-4 w-4" /> Watch a short video to unlock a 2nd partner
             </button>
-          ) : (
-            <button onClick={() => toast("Subscriptions are coming soon ✨")}
+          ) : slots >= 2 ? (
+            <button onClick={goPremium}
               className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl bg-secondary-soft px-4 py-4 text-xs font-bold text-secondary">
               <Crown className="h-4 w-4" /> Upgrade to add a 3rd partner
             </button>
-          )}
+          ) : null}
         </div>
 
         <button onClick={onSignOut} className="mt-8 mb-8 flex w-full items-center justify-center gap-2 rounded-full bg-destructive/10 px-5 py-3 text-sm font-bold text-destructive">
