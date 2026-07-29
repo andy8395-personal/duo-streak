@@ -107,6 +107,7 @@ export function SettingsDrawer({
     installEvt.prompt();
     setInstallEvt(null);
   };
+  const goPremium = () => { onOpenChange(false); navigate({ to: "/premium" }); };
 
 
   const saveProfile = async () => {
