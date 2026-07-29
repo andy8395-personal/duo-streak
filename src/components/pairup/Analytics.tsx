@@ -53,7 +53,7 @@ export function AnalyticsView({
   const list = pairs ?? [];
   const nameFor = (p: Pair) => {
     const oid = p.user1_id === userId ? p.user2_id : p.user1_id;
-    return (oid && profileNames?.[oid]) || `Code ${p.invite_code}`;
+    return (oid && profileNames?.[oid]) || "Partner";
   };
 
   return (
