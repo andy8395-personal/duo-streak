@@ -445,22 +445,14 @@ function Dashboard() {
               </div>
             </div>
 
+            {/* history & insights — visually separate from today's habits */}
+            <div className="mx-6 mt-8 mb-1 flex items-center gap-2">
+              <span className="grid h-7 w-7 place-items-center rounded-lg bg-secondary-soft text-secondary"><BarChart3 className="h-3.5 w-3.5" /></span>
+              <h2 className="text-xs font-bold uppercase tracking-wider text-secondary">History &amp; insights</h2>
+              <span className="h-px flex-1 bg-border" />
+            </div>
             <MonthlyCalendar stats={stats} />
 
-            {/* freeze card */}
-            {!streakBroken && (
-              <div className="mx-6 mt-4 flex items-center gap-3 rounded-3xl bg-surface px-5 py-4 shadow-[var(--shadow-card)]">
-                <span className="grid h-10 w-10 place-items-center rounded-xl bg-secondary-soft text-secondary"><Snowflake className="h-5 w-5" /></span>
-                <div className="flex-1">
-                  <div className="text-sm font-bold">Streak Freeze</div>
-                  <div className="text-xs text-muted-foreground">{freezeUsedThisMonth ? "Used this month — extras come with Pro" : "1 free save per month if life gets in the way"}</div>
-                </div>
-                <button onClick={freezeUsedThisMonth ? () => toast("Extra freezes are part of Pro ✨") : useFreeze}
-                  className="rounded-full bg-secondary px-4 py-2 text-xs font-bold text-secondary-foreground">
-                  {freezeUsedThisMonth ? "Get Pro" : "Use"}
-                </button>
-              </div>
-            )}
               </>
             )}
           </motion.div>
