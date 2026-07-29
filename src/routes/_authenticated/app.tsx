@@ -383,7 +383,7 @@ function Dashboard() {
               </div>
             )}
 
-            {!partner && <PendingPartner code={activePair.invite_code} onCopy={copyInvite} />}
+            {!partner && <PendingPartner onCopy={copyInvite} />}
 
             <WeeklyRibbon stats={stats} />
 
