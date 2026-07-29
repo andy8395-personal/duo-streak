@@ -247,9 +247,9 @@ export function SettingsDrawer({
               <li className="flex items-center gap-2"><Check className="h-3.5 w-3.5" /> 1 Streak Freeze every month</li>
               <li className="flex items-center gap-2"><Check className="h-3.5 w-3.5" /> 3 habits, 4th unlocked with a short video</li>
             </ul>
-            <button onClick={() => toast("Subscriptions are coming soon ✨")}
+            <button onClick={goPremium}
               className="mt-4 w-full rounded-full bg-surface px-4 py-2.5 text-xs font-bold text-secondary">
-              Upgrade for unlimited partners & freezes
+              See PairUp Pro
             </button>
           </div>
         </div>
