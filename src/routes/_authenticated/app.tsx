@@ -355,7 +355,16 @@ function Dashboard() {
                   </DropdownMenuContent>
                 </DropdownMenu>
               )}
+              {profile.plan !== "pro" && (
+                <Link
+                  to="/premium"
+                  className="ml-auto inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-primary to-secondary px-3 py-1.5 text-xs font-extrabold text-primary-foreground shadow-[var(--shadow-primary)] transition active:scale-95"
+                >
+                  <Crown className="h-3.5 w-3.5" /> Go Pro
+                </Link>
+              )}
             </div>
+
 
             {tab === "stats" ? (
               <AnalyticsView
