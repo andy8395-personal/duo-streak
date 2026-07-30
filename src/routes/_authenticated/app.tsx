@@ -330,9 +330,11 @@ function Dashboard() {
 
             {/* invite + switcher row */}
             <div className="mt-4 flex items-center gap-2 px-6">
-              <button onClick={copyInvite} className="inline-flex items-center gap-2 rounded-full bg-primary-soft px-3 py-1.5 text-xs font-bold text-primary transition active:scale-95">
-                <Copy className="h-3 w-3" /> {activePair.invite_code}
-              </button>
+              {!partner && (
+                <button onClick={copyInvite} className="inline-flex items-center gap-2 rounded-full bg-primary-soft px-3 py-1.5 text-xs font-bold text-primary transition active:scale-95">
+                  <Copy className="h-3 w-3" /> {activePair.invite_code}
+                </button>
+              )}
               {pairs.length > 1 && (
                 <DropdownMenu>
                   <DropdownMenuTrigger className="inline-flex items-center gap-1.5 rounded-full bg-secondary-soft px-3 py-1.5 text-xs font-bold text-secondary">
@@ -345,10 +347,11 @@ function Dashboard() {
                       const oid = p.user1_id === userId ? p.user2_id : p.user1_id;
                       return (
                         <DropdownMenuItem key={p.id} onClick={() => switchPair(p.id)}>
-                          {(oid && profiles[oid]?.display_name) || `Code ${p.invite_code}`} · 🔥 {p.current_streak}
+                          {(oid && profiles[oid]?.display_name) || "Pending partner"} · 🔥 {p.current_streak}
                         </DropdownMenuItem>
                       );
                     })}
+
                   </DropdownMenuContent>
                 </DropdownMenu>
               )}
@@ -388,7 +391,7 @@ function Dashboard() {
               </div>
             )}
 
-            {!partner && <PendingPartner onCopy={copyInvite} />}
+            {!partner && <PendingPartner />}
 
             <WeeklyRibbon stats={stats} />
 
@@ -624,17 +627,15 @@ function StreakHero({ streak, longest, complete, myDone, theirDone, total, partn
   );
 }
 
-function PendingPartner({ onCopy }: { onCopy: () => void }) {
+function PendingPartner() {
   return (
     <div className="mx-6 mt-4 rounded-3xl bg-secondary-soft p-5 text-center">
       <div className="text-sm font-bold text-secondary">Waiting for your partner to join</div>
-      <p className="mt-1 text-xs text-muted-foreground">Share your invite code from the badge at the top.</p>
-      <button onClick={onCopy} className="mt-3 inline-flex items-center gap-2 rounded-full bg-surface px-4 py-2 text-xs font-bold text-secondary">
-        <Copy className="h-3.5 w-3.5" /> Copy invite code
-      </button>
+      <p className="mt-1 text-xs text-muted-foreground">Tap the invite code badge at the top to copy and share it.</p>
     </div>
   );
 }
+
 
 function CelebrationModal({ open, streak, partnerName, onClose }: { open: boolean; streak: number; partnerName: string; onClose: () => void }) {
   return (
