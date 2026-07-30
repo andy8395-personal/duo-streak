@@ -1,10 +1,11 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Copy, Share2, Plus, Bell, Users, UserPlus, ChevronDown, Home, Snowflake, Check,
-  PlayCircle, Trophy, Flame, Sparkles, BarChart3, Settings as SettingsIcon,
+  PlayCircle, Trophy, Flame, Sparkles, BarChart3, Crown, Settings as SettingsIcon,
 } from "lucide-react";
+
 import { toast } from "sonner";
 import logo from "@/assets/pairup-logo.png.asset.json";
 import { supabase } from "@/integrations/supabase/client";
