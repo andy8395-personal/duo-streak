@@ -391,7 +391,7 @@ function Dashboard() {
               </div>
             )}
 
-            {!partner && <PendingPartner onCopy={copyInvite} />}
+            {!partner && <PendingPartner />}
 
             <WeeklyRibbon stats={stats} />
 
