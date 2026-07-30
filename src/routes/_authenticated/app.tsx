@@ -330,9 +330,11 @@ function Dashboard() {
 
             {/* invite + switcher row */}
             <div className="mt-4 flex items-center gap-2 px-6">
-              <button onClick={copyInvite} className="inline-flex items-center gap-2 rounded-full bg-primary-soft px-3 py-1.5 text-xs font-bold text-primary transition active:scale-95">
-                <Copy className="h-3 w-3" /> {activePair.invite_code}
-              </button>
+              {!partner && (
+                <button onClick={copyInvite} className="inline-flex items-center gap-2 rounded-full bg-primary-soft px-3 py-1.5 text-xs font-bold text-primary transition active:scale-95">
+                  <Copy className="h-3 w-3" /> {activePair.invite_code}
+                </button>
+              )}
               {pairs.length > 1 && (
                 <DropdownMenu>
                   <DropdownMenuTrigger className="inline-flex items-center gap-1.5 rounded-full bg-secondary-soft px-3 py-1.5 text-xs font-bold text-secondary">
@@ -345,10 +347,11 @@ function Dashboard() {
                       const oid = p.user1_id === userId ? p.user2_id : p.user1_id;
                       return (
                         <DropdownMenuItem key={p.id} onClick={() => switchPair(p.id)}>
-                          {(oid && profiles[oid]?.display_name) || `Code ${p.invite_code}`} · 🔥 {p.current_streak}
+                          {(oid && profiles[oid]?.display_name) || "Pending partner"} · 🔥 {p.current_streak}
                         </DropdownMenuItem>
                       );
                     })}
+
                   </DropdownMenuContent>
                 </DropdownMenu>
               )}
