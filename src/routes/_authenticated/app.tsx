@@ -627,17 +627,15 @@ function StreakHero({ streak, longest, complete, myDone, theirDone, total, partn
   );
 }
 
-function PendingPartner({ onCopy }: { onCopy: () => void }) {
+function PendingPartner() {
   return (
     <div className="mx-6 mt-4 rounded-3xl bg-secondary-soft p-5 text-center">
       <div className="text-sm font-bold text-secondary">Waiting for your partner to join</div>
-      <p className="mt-1 text-xs text-muted-foreground">Share your invite code from the badge at the top.</p>
-      <button onClick={onCopy} className="mt-3 inline-flex items-center gap-2 rounded-full bg-surface px-4 py-2 text-xs font-bold text-secondary">
-        <Copy className="h-3.5 w-3.5" /> Copy invite code
-      </button>
+      <p className="mt-1 text-xs text-muted-foreground">Tap the invite code badge at the top to copy and share it.</p>
     </div>
   );
 }
+
 
 function CelebrationModal({ open, streak, partnerName, onClose }: { open: boolean; streak: number; partnerName: string; onClose: () => void }) {
   return (
