@@ -16,6 +16,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { EMOJIS, Pair, Profile, TIMEZONES } from "./types";
 import { Avatar } from "./Avatar";
 import { notificationPermission, requestNotificationPermission } from "@/lib/notifications";
+import { isNativePush, registerPush, unregisterPush } from "@/lib/push";
 
 export function SettingsDrawer({
   open, onOpenChange, profile, pairs, profiles, activePairId, userId,
@@ -95,7 +96,18 @@ export function SettingsDrawer({
   };
 
   const toggleNotifications = async () => {
-    if (profile.push_enabled) { await patchProfile({ push_enabled: false }); toast("Reminders off"); return; }
+    if (profile.push_enabled) {
+      if (isNativePush()) await unregisterPush();
+      await patchProfile({ push_enabled: false });
+      toast("Reminders off");
+      return;
+    }
+    if (isNativePush()) {
+      await registerPush();
+      await patchProfile({ push_enabled: true });
+      toast.success("Nudges will now buzz your device 🔔");
+      return;
+    }
     const result = await requestNotificationPermission();
     setPerm(result);
     if (result === "unsupported") { toast.error("This device doesn't support notifications"); return; }

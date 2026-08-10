@@ -1,8 +1,11 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { ArrowLeft, Check, Crown, Snowflake, Users, Sparkles, BarChart3 } from "lucide-react";
+import { ArrowLeft, Check, Crown, Snowflake, Users, Sparkles, BarChart3, Smartphone } from "lucide-react";
 import { toast } from "sonner";
+import type { PurchasesOffering, PurchasesPackage } from "@revenuecat/purchases-capacitor";
+import { supabase } from "@/integrations/supabase/client";
+import { getCurrentOffering, isNativePurchases, isPro, purchase, restore } from "@/lib/purchases";
 
 export const Route = createFileRoute("/_authenticated/premium")({
   head: () => ({
@@ -28,7 +31,63 @@ const PERKS = [
 
 function Premium() {
   const navigate = useNavigate();
-  const [plan, setPlan] = useState<"monthly" | "yearly">("yearly");
+  const native = isNativePurchases();
+  const [plan, setPlan] = useState("free");
+  const [offering, setOffering] = useState<PurchasesOffering | null>(null);
+  const [selected, setSelected] = useState<PurchasesPackage | null>(null);
+  const [loading, setLoading] = useState(native);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      const { data: userData } = await supabase.auth.getUser();
+      if (userData.user) {
+        const { data } = await supabase.from("profiles").select("plan").eq("id", userData.user.id).maybeSingle();
+        if (data) setPlan(data.plan);
+      }
+      if (native) {
+        try {
+          const current = await getCurrentOffering();
+          setOffering(current);
+          setSelected(current?.annual ?? current?.monthly ?? current?.availablePackages[0] ?? null);
+        } catch (err) {
+          console.error("[premium] failed to load offerings", err);
+        } finally {
+          setLoading(false);
+        }
+      }
+    })();
+  }, [native]);
+
+  const buy = async () => {
+    if (!selected) return;
+    setBusy(true);
+    try {
+      const info = await purchase(selected);
+      if (isPro(info)) {
+        setPlan("pro");
+        toast.success("Welcome to PairUp Pro! 🎉");
+      }
+    } catch (err: unknown) {
+      const cancelled = typeof err === "object" && err !== null && "userCancelled" in err && (err as { userCancelled?: boolean }).userCancelled;
+      if (!cancelled) toast.error(err instanceof Error ? err.message : "Purchase failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const restoreClick = async () => {
+    setBusy(true);
+    try {
+      const info = await restore();
+      if (isPro(info)) { setPlan("pro"); toast.success("Pro restored!"); }
+      else toast("No previous Pro purchase found on this account");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Restore failed");
+    } finally {
+      setBusy(false);
+    }
+  };
 
   return (
     <div className="min-h-dvh bg-background text-foreground">
@@ -64,15 +123,55 @@ function Premium() {
           ))}
         </div>
 
-        <div className="mt-7 grid grid-cols-2 gap-3">
-          <PlanCard label="Monthly" price="$4.99" sub="per month" active={plan === "monthly"} onClick={() => setPlan("monthly")} />
-          <PlanCard label="Yearly" price="$39.99" sub="$3.33 / month" badge="Save 33%" active={plan === "yearly"} onClick={() => setPlan("yearly")} />
-        </div>
+        {plan === "pro" ? (
+          <div className="mt-7 rounded-3xl bg-success-soft p-5 text-center">
+            <Crown className="mx-auto h-6 w-6 text-success" />
+            <div className="mt-2 text-sm font-bold text-success">You're on PairUp Pro</div>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Manage or cancel anytime from your {navigator.userAgent.includes("iPhone") || navigator.userAgent.includes("iPad") ? "Apple ID" : "Google Play"} subscriptions.
+            </p>
+          </div>
+        ) : !native ? (
+          <div className="mt-7 rounded-3xl bg-surface p-5 text-center shadow-[var(--shadow-card)]">
+            <Smartphone className="mx-auto h-6 w-6 text-secondary" />
+            <div className="mt-2 text-sm font-bold">Subscribe from the PairUp app</div>
+            <p className="mt-1 text-xs text-muted-foreground">
+              PairUp Pro is sold as an in-app subscription through the App Store / Google Play. Install PairUp on your phone to upgrade.
+            </p>
+          </div>
+        ) : loading ? (
+          <div className="mt-7 text-center text-xs text-muted-foreground">Loading plans…</div>
+        ) : !offering || offering.availablePackages.length === 0 ? (
+          <div className="mt-7 rounded-3xl bg-surface p-5 text-center shadow-[var(--shadow-card)]">
+            <div className="text-sm font-bold">Plans aren't available yet</div>
+            <p className="mt-1 text-xs text-muted-foreground">Check back shortly — Pro plans are being set up.</p>
+          </div>
+        ) : (
+          <>
+            <div className="mt-7 grid grid-cols-2 gap-3">
+              {offering.availablePackages.map((pkg) => (
+                <PlanCard
+                  key={pkg.identifier}
+                  label={pkg.packageType === "ANNUAL" ? "Yearly" : pkg.packageType === "MONTHLY" ? "Monthly" : pkg.product.title}
+                  price={pkg.product.priceString}
+                  sub={pkg.product.pricePerMonthString ? `${pkg.product.pricePerMonthString} / month` : ""}
+                  badge={offering.annual?.identifier === pkg.identifier ? "Best value" : undefined}
+                  active={selected?.identifier === pkg.identifier}
+                  onClick={() => setSelected(pkg)}
+                />
+              ))}
+            </div>
 
-        <button onClick={() => toast("Checkout is coming soon ✨")}
-          className="mt-5 w-full rounded-full bg-primary px-6 py-4 text-sm font-bold text-primary-foreground shadow-[var(--shadow-primary)] transition active:scale-[0.98]">
-          Start {plan === "yearly" ? "yearly" : "monthly"} plan
-        </button>
+            <button onClick={buy} disabled={busy || !selected}
+              className="mt-5 w-full rounded-full bg-primary px-6 py-4 text-sm font-bold text-primary-foreground shadow-[var(--shadow-primary)] transition active:scale-[0.98] disabled:opacity-60">
+              {busy ? "…" : `Start ${selected?.packageType === "ANNUAL" ? "yearly" : "monthly"} plan`}
+            </button>
+            <button onClick={restoreClick} disabled={busy} className="mt-3 text-center text-xs font-semibold text-muted-foreground underline">
+              Restore purchases
+            </button>
+          </>
+        )}
+
         <p className="mt-3 text-center text-[11px] text-muted-foreground">
           Cancel anytime. The free plan keeps 1 partner, 3 habits and 1 streak freeze each month.
         </p>

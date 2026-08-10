@@ -10,6 +10,8 @@ import { toast } from "sonner";
 import logo from "@/assets/pairup-logo.png.asset.json";
 import { supabase } from "@/integrations/supabase/client";
 import { showLocalNotification } from "@/lib/notifications";
+import { registerPush, sendPush, unregisterPush } from "@/lib/push";
+import { configurePurchases, logOutPurchases } from "@/lib/purchases";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -72,6 +74,7 @@ function Dashboard() {
   const refreshProfile = useCallback(async (uid: string) => {
     const { data } = await supabase.from("profiles").select("*").eq("id", uid).maybeSingle();
     if (data) setProfile(data as Profile);
+    return data as Profile | null;
   }, []);
 
   const loadPairs = useCallback(async (uid: string) => {
@@ -86,7 +89,9 @@ function Dashboard() {
       const { data: userData } = await supabase.auth.getUser();
       if (!userData.user) return;
       setUserId(userData.user.id);
-      await refreshProfile(userData.user.id);
+      const profileRow = await refreshProfile(userData.user.id);
+      if (profileRow?.push_enabled) void registerPush();
+      void configurePurchases(userData.user.id);
     })();
   }, [refreshProfile]);
 
@@ -255,6 +260,7 @@ function Dashboard() {
     }
     haptic(20);
     toast.success(`Nudge sent to ${partner?.display_name ?? "your partner"}!`);
+    void sendPush(partnerId, "PairUp nudge", message, habitId ? { habitId } : undefined);
   };
 
   const useFreeze = async () => {
@@ -292,6 +298,8 @@ function Dashboard() {
   };
 
   const signOut = async () => {
+    await unregisterPush();
+    await logOutPurchases();
     await supabase.auth.signOut();
     navigate({ to: "/auth", replace: true });
   };

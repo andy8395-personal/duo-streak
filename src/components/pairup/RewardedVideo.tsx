@@ -8,6 +8,17 @@ import {
 /**
  * Mock rewarded-video placement. Plays a 5s "ad", then fires onReward().
  * Swap the inner player for a real ad SDK later — the surrounding flow stays.
+ *
+ * Intended real backend: Yodo1 MAS rewarded video, once this app is wrapped
+ * in Capacitor for iOS/Android. There is no official (or verified working
+ * unofficial) Capacitor/Cordova plugin for Yodo1 as of this writing — it only
+ * has first-party support for Unity, native iOS/Android, Flutter and React
+ * Native. Wiring this up for real means writing a small custom Capacitor
+ * plugin (Swift + Kotlin) against Yodo1's native SDK, which needs Xcode /
+ * Android Studio installed locally to pull the SDK and verify the calls
+ * against its real headers rather than guessing from docs alone. Do that
+ * once the toolchain is available — see AGENTS.md / capacitor.config.ts for
+ * the rest of the native-wrap setup already in place.
  */
 export function RewardedVideoDialog({
   open, onOpenChange, title, description, rewardLabel, onReward,

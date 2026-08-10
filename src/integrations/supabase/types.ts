@@ -14,6 +14,33 @@ export type Database = {
   }
   public: {
     Tables: {
+      device_tokens: {
+        Row: {
+          created_at: string
+          id: string
+          platform: string
+          token: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          platform: string
+          token: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          platform?: string
+          token?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       habit_logs: {
         Row: {
           created_at: string
@@ -278,6 +305,10 @@ export type Database = {
         Returns: boolean
       }
       join_pair: { Args: { _code: string }; Returns: string }
+      register_device_token: {
+        Args: { _platform: string; _token: string }
+        Returns: undefined
+      }
       shares_pair_with: {
         Args: { _me: string; _other_id: string }
         Returns: boolean
