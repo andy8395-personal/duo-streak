@@ -27,6 +27,13 @@ CREATE TRIGGER device_tokens_touch BEFORE UPDATE ON public.device_tokens
 
 CREATE INDEX IF NOT EXISTS device_tokens_user_idx ON public.device_tokens (user_id);
 
+-- Defined defensively (not assumed to already exist — the live database and
+-- the migrations/ folder have drifted before) rather than relying on the
+-- touch_updated_at() from the first migration.
+CREATE OR REPLACE FUNCTION public.touch_updated_at() RETURNS trigger
+LANGUAGE plpgsql SET search_path = public AS $$
+BEGIN NEW.updated_at = now(); RETURN NEW; END $$;
+
 -- Upsert-by-token so re-registering the same physical device on a new
 -- account moves the token instead of violating the unique constraint.
 CREATE OR REPLACE FUNCTION public.register_device_token(_token text, _platform text)
