@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Debug-only manifest override, merged on top of the main one. Cleartext
+  HTTP is only needed to reach the local dev server / Android emulator host
+  alias (10.0.2.2) — release builds point at the HTTPS production URL and
+  never need this, so it's kept out of the main manifest.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application android:usesCleartextTraffic="true" />
+</manifest>
