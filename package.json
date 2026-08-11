@@ -9,10 +9,15 @@
     "build:dev": "vite build --mode development",
     "preview": "vite preview",
     "lint": "eslint .",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "cap:sync:ios": "npx cap sync ios",
+    "cap:sync:android": "CAP_DEV_HOST=10.0.2.2 npx cap sync android",
+    "cap:sync:dev": "npm run cap:sync:ios && npm run cap:sync:android"
   },
   "dependencies": {
     "@capacitor-firebase/messaging": "^8.3.0",
+    "@capacitor/app": "^8.1.1",
+    "@capacitor/browser": "^8.0.4",
     "@capacitor/core": "^8.5.0",
     "@hookform/resolvers": "^5.2.2",
     "@lovable.dev/cloud-auth-js": "^1.1.2",

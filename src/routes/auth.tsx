@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { lovable } from "@/integrations/lovable";
+import { signInWithGoogle } from "@/lib/googleAuth";
 import { toast } from "sonner";
 import logo from "@/assets/pairup-logo.png.asset.json";
 
@@ -32,6 +32,13 @@ function AuthPage() {
     supabase.auth.getSession().then(({ data }) => {
       if (data.session) navigate({ to: "/app", replace: true });
     });
+    // Catches the session set asynchronously by the native Google sign-in
+    // deep link (see googleAuth.ts) — that resolves outside this component,
+    // in the app-wide appUrlOpen listener, so we only find out via this event.
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session) navigate({ to: "/app", replace: true });
+    });
+    return () => sub.subscription.unsubscribe();
   }, [navigate]);
 
   const submit = async (e: React.FormEvent) => {
@@ -63,16 +70,17 @@ function AuthPage() {
 
   const google = async () => {
     setLoading(true);
-    const result = await lovable.auth.signInWithOAuth("google", {
-      redirect_uri: window.location.origin,
-    });
-    if (result.error) {
-      toast.error(result.error.message || "Google sign-in failed");
+    const { error } = await signInWithGoogle();
+    if (error) {
+      toast.error(error.message || "Google sign-in failed");
       setLoading(false);
       return;
     }
-    if (result.redirected) return;
-    navigate({ to: "/app", replace: true });
+    // Web: the page is about to redirect away. Native: the system browser
+    // is open; the appUrlOpen listener (registered in __root.tsx) picks up
+    // the callback and completes the sign-in, after which the auth state
+    // change fires and the user lands back here already signed in.
+    setLoading(false);
   };
 
   return (
